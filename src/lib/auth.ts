@@ -50,7 +50,8 @@ export const auth = betterAuth({
     },
   },
   secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-in-production-32chars!",
-  baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  baseURL: process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
 })
 
 export type Session = typeof auth.$Infer.Session
