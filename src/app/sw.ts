@@ -5,6 +5,9 @@
 // the PWA "installable" capability. Re-add caching strategies later when
 // the app is stable and we have a tested cache-busting plan.
 
+// Reference required by Serwist's build pipeline; we intentionally do nothing with it.
+void self.__SW_MANIFEST
+
 self.addEventListener("install", (event) => {
   // Activate this SW immediately, replacing any older one.
   self.skipWaiting()
