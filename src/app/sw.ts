@@ -26,15 +26,26 @@ const serwist = new Serwist({
       },
     },
     {
-      matcher: ({ request }) => request.mode === "navigate",
+      matcher: ({ request, url }) =>
+        request.mode === "navigate" && !url.pathname.startsWith("/api/auth"),
       handler: "NetworkFirst",
-      options: { cacheName: "pages-cache" },
+      options: {
+        cacheName: "pages-cache",
+        networkTimeoutSeconds: 3,
+        cacheableResponse: { statuses: [200] },
+      },
+    },
+    {
+      matcher: /\/api\/auth\/.*/,
+      handler: "NetworkOnly",
     },
     {
       matcher: /\/api\/.*/,
       handler: "NetworkFirst",
       options: {
         cacheName: "api-cache",
+        networkTimeoutSeconds: 3,
+        cacheableResponse: { statuses: [200] },
         expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
       },
     },
