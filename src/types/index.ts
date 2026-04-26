@@ -1,0 +1,94 @@
+export type SubscriptionTier = "free" | "premium"
+
+export interface MockUser {
+  id: string
+  name: string
+  email: string
+  avatar: string | null
+  tier: SubscriptionTier
+  telegramId: string | null
+  waId: string | null
+  verificationCode: string
+}
+
+export type AccountType = "bank" | "ewallet" | "cash"
+
+export interface Account {
+  id: string
+  userId: string
+  accountType: AccountType
+  accountName: string
+  balance: number
+  color: string
+  icon: string
+}
+
+export type TransactionType = "income" | "expense"
+
+export type Category =
+  | "makanan"
+  | "transportasi"
+  | "belanja"
+  | "hiburan"
+  | "tagihan"
+  | "kesehatan"
+  | "pendidikan"
+  | "gaji"
+  | "lainnya"
+
+export interface Transaction {
+  id: string
+  userId: string
+  accountId: string
+  amount: number
+  type: TransactionType
+  category: Category
+  description: string
+  transactionDate: string
+  source: "manual" | "bot" | "import"
+}
+
+export type SplitStatus = "unpaid" | "paid"
+
+export interface SplitBill {
+  id: string
+  transactionId: string
+  transactionDescription: string
+  totalAmount: number
+  targetName: string
+  targetContact: string
+  splitAmount: number
+  status: SplitStatus
+  createdAt: string
+}
+
+export type NotificationKind =
+  | "transaction_added"
+  | "budget_warning"
+  | "split_reminder"
+  | "weekly_summary"
+  | "system"
+
+export interface AppNotification {
+  id: string
+  userId: string
+  kind: NotificationKind
+  title: string
+  body: string
+  isRead: boolean
+  createdAt: string
+}
+
+export interface PricingFeature {
+  label: string
+  included: boolean
+}
+
+export interface PricingPlan {
+  id: "free" | "premium_monthly" | "premium_yearly"
+  name: string
+  price: number
+  period: "selamanya" | "bulan" | "tahun"
+  features: PricingFeature[]
+  highlight: boolean
+}

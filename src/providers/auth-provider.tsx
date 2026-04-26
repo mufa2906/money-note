@@ -1,0 +1,80 @@
+"use client"
+
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { useSession } from "@/lib/auth-client"
+import type { SubscriptionTier } from "@/types"
+
+interface AuthUser {
+  id: string
+  name: string
+  email: string
+  image?: string | null
+  subscriptionTier: SubscriptionTier
+  telegramId?: string | null
+  waId?: string | null
+  verificationCode?: string | null
+}
+
+interface AuthContextValue {
+  user: AuthUser | null
+  isLoading: boolean
+  isAuthenticated: boolean
+  refetchUser: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const { data: session, isPending } = useSession()
+  const [user, setUser] = useState<AuthUser | null>(null)
+
+  async function refetchUser() {
+    try {
+      const res = await fetch("/api/user")
+      if (res.ok) {
+        const data = await res.json()
+        setUser({
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          image: data.image,
+          subscriptionTier: (data.subscriptionTier as SubscriptionTier) ?? "free",
+          telegramId: data.telegramId,
+          waId: data.waId,
+          verificationCode: data.verificationCode,
+        })
+      }
+    } catch {
+      // ignore fetch errors (e.g. unauthenticated)
+    }
+  }
+
+  useEffect(() => {
+    if (session?.user) {
+      setUser({
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image,
+        subscriptionTier: ((session.user as Record<string, unknown>).subscriptionTier as SubscriptionTier) ?? "free",
+        telegramId: (session.user as Record<string, unknown>).telegramId as string | null,
+        waId: (session.user as Record<string, unknown>).waId as string | null,
+        verificationCode: (session.user as Record<string, unknown>).verificationCode as string | null,
+      })
+    } else if (!isPending) {
+      setUser(null)
+    }
+  }, [session, isPending])
+
+  return (
+    <AuthContext.Provider value={{ user, isLoading: isPending, isAuthenticated: !!user, refetchUser }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider")
+  return ctx
+}

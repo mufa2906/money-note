@@ -1,0 +1,7 @@
+"use client"
+
+import { useAuth } from "@/providers/auth-provider"
+
+export function useMockUser() {
+  return useAuth()
+}

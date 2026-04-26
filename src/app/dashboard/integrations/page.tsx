@@ -1,0 +1,207 @@
+"use client"
+
+import { useState } from "react"
+import { Bot, Copy, Check, ExternalLink, Lock, Crown, MessageCircle, RefreshCw } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useAuth } from "@/providers/auth-provider"
+import Link from "next/link"
+import { useToast } from "@/lib/hooks/use-toast"
+
+export default function IntegrationsPage() {
+  const { user, refetchUser } = useAuth()
+  const { toast } = useToast()
+  const isPremium = user?.subscriptionTier === "premium"
+  const verificationCode = user?.verificationCode
+  const [copied, setCopied] = useState(false)
+  const [telegramLinked, setTelegramLinked] = useState(!!user?.telegramId)
+  const [generatingCode, setGeneratingCode] = useState(false)
+
+  function copyCode() {
+    if (!verificationCode) return
+    navigator.clipboard.writeText(verificationCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function generateCode() {
+    setGeneratingCode(true)
+    try {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+      let code = "MN-"
+      for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ verificationCode: code }),
+      })
+      if (!res.ok) throw new Error()
+      await refetchUser()
+      toast({ title: "Kode dibuat!", description: "Kode verifikasi baru siap digunakan." })
+    } catch {
+      toast({ title: "Gagal", description: "Coba lagi.", variant: "destructive" })
+    } finally {
+      setGeneratingCode(false)
+    }
+  }
+
+  async function unlinkTelegram() {
+    await fetch("/api/user", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ telegramId: null }),
+    })
+    await refetchUser()
+    setTelegramLinked(false)
+    toast({ title: "Telegram diputus", description: "Bot Telegram tidak lagi terhubung." })
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-bold">Integrasi Bot</h1>
+        <p className="text-sm text-muted-foreground">Hubungkan akun dengan Telegram atau WhatsApp</p>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Bot className="h-5 w-5 text-blue-500" />
+              Telegram Bot
+            </CardTitle>
+            <Badge variant="secondary">Gratis</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {telegramLinked || user?.telegramId ? (
+            <div className="space-y-3">
+              <Alert>
+                <Check className="h-4 w-4 text-green-500" />
+                <AlertDescription className="text-sm">
+                  <span className="font-medium text-green-600">Terhubung!</span> Telegram Bot sudah terhubung dengan akunmu.
+                </AlertDescription>
+              </Alert>
+              <Button variant="outline" size="sm" className="w-full" onClick={unlinkTelegram}>
+                Putuskan Koneksi Telegram
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
+                <span className="text-sm text-muted-foreground flex-shrink-0">Kode verifikasi:</span>
+                {verificationCode ? (
+                  <code className="flex-1 font-mono font-bold tracking-widest text-primary">{verificationCode}</code>
+                ) : (
+                  <Skeleton className="flex-1 h-5" />
+                )}
+                {verificationCode ? (
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copyCode}>
+                    {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={generateCode} disabled={generatingCode}>
+                    <RefreshCw className={`h-3.5 w-3.5 ${generatingCode ? "animate-spin" : ""}`} />
+                    Buat Kode
+                  </Button>
+                )}
+              </div>
+
+              {verificationCode && (
+                <>
+                  <div className="space-y-2 text-sm">
+                    <p className="font-medium">Langkah menghubungkan:</p>
+                    <ol className="space-y-2 text-muted-foreground list-decimal pl-4">
+                      <li>Buka Telegram dan cari <span className="font-mono text-foreground">@MoneyNoteBot</span></li>
+                      <li>Kirim pesan: <code className="bg-muted rounded px-1 text-foreground">/start {verificationCode}</code></li>
+                      <li>Bot akan mengkonfirmasi akunmu berhasil terhubung</li>
+                    </ol>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button asChild variant="outline" size="sm" className="flex-1">
+                      <a href={`https://t.me/MoneyNoteBot?start=${verificationCode}`} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4 mr-1.5" />Buka Telegram
+                      </a>
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1" onClick={generateCode} disabled={generatingCode}>
+                      <RefreshCw className={`h-3.5 w-3.5 ${generatingCode ? "animate-spin" : ""}`} />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <Separator />
+          <div>
+            <p className="text-sm font-medium mb-2">Perintah Bot yang tersedia:</p>
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              {[
+                ["/catat", "Catat transaksi baru"],
+                ["/saldo", "Lihat total saldo"],
+                ["/ringkasan", "Ringkasan bulan ini"],
+                ["/tagihan", "Daftar tagihan aktif"],
+              ].map(([cmd, desc]) => (
+                <div key={cmd} className="flex items-center gap-1.5 bg-muted rounded p-1.5">
+                  <code className="font-mono text-primary text-[11px]">{cmd}</code>
+                  <span className="text-muted-foreground">{desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="relative overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-green-500" />
+              WhatsApp Bot
+            </CardTitle>
+            <Badge><Crown className="h-3 w-3 mr-1" />Premium</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isPremium ? (
+            <div className="space-y-3">
+              {user?.waId ? (
+                <Alert>
+                  <Check className="h-4 w-4 text-green-500" />
+                  <AlertDescription className="text-sm">
+                    <span className="font-medium text-green-600">Terhubung!</span> WhatsApp Bot aktif di {user.waId}.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert>
+                  <AlertDescription className="text-sm">
+                    Hubungkan WhatsApp untuk catat transaksi lebih mudah melalui chat WA.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Button className="w-full">
+                {user?.waId ? "Ganti Nomor WhatsApp" : "Hubungkan WhatsApp"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <Lock className="h-8 w-8 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Fitur Premium</p>
+                <p className="text-xs text-muted-foreground mt-1">WhatsApp Bot tersedia untuk pengguna Premium karena ada biaya operasional per percakapan.</p>
+              </div>
+              <Button asChild size="sm">
+                <Link href="/dashboard/upgrade">Upgrade ke Premium</Link>
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
