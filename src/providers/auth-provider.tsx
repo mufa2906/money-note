@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
 import { useSession } from "@/lib/auth-client"
 import type { SubscriptionTier } from "@/types"
 
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: session, isPending } = useSession()
   const [user, setUser] = useState<AuthUser | null>(null)
 
-  async function refetchUser() {
+  const refetchUser = useCallback(async () => {
     try {
       const res = await fetch("/api/user")
       if (res.ok) {
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore fetch errors (e.g. unauthenticated)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (session?.user) {

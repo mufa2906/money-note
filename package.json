@@ -65,6 +65,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@serwist/next": "^9.5.7",
     "drizzle-kit": "^0.31.10"
   }

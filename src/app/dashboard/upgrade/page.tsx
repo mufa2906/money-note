@@ -1,7 +1,7 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Check, Crown, Zap } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -29,16 +29,59 @@ function CheckoutStatusToast() {
   const { refetchUser } = useAuth()
   const { toast } = useToast()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const handledRef = useRef(false)
 
   useEffect(() => {
+    if (handledRef.current) return
     const status = searchParams.get("status")
-    if (status === "success") {
-      toast({ title: "Pembayaran diterima", description: "Akun Premium aktif setelah konfirmasi (biasanya beberapa detik)." })
-      refetchUser()
-    } else if (status === "failed") {
+    if (status !== "success" && status !== "failed") return
+
+    handledRef.current = true
+    router.replace("/dashboard/upgrade")
+
+    if (status === "failed") {
       toast({ title: "Pembayaran gagal", description: "Silakan coba lagi.", variant: "destructive" })
+      return
     }
-  }, [searchParams, toast, refetchUser])
+
+    let cancelled = false
+    let attempts = 0
+    const maxAttempts = 10
+    const intervalMs = 2000
+
+    const poll = async () => {
+      if (cancelled) return
+      attempts += 1
+      try {
+        const res = await fetch("/api/user", { cache: "no-store" })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.subscriptionTier === "premium") {
+            await refetchUser()
+            toast({ title: "Pembayaran berhasil", description: "Akun kamu sekarang Premium. Selamat menikmati!" })
+            return
+          }
+        }
+      } catch {
+        // ignore and retry
+      }
+      if (attempts >= maxAttempts) {
+        toast({
+          title: "Pembayaran sedang dikonfirmasi",
+          description: "Tunggu beberapa saat. Premium akan aktif otomatis setelah konfirmasi diterima.",
+        })
+        return
+      }
+      setTimeout(poll, intervalMs)
+    }
+
+    poll()
+
+    return () => {
+      cancelled = true
+    }
+  }, [searchParams, toast, refetchUser, router])
 
   return null
 }
