@@ -38,6 +38,9 @@ function CheckoutStatusToast() {
     if (status !== "success" && status !== "failed") return
 
     handledRef.current = true
+    if (typeof window !== "undefined") {
+      window.history.replaceState({}, "", "/dashboard/upgrade")
+    }
     router.replace("/dashboard/upgrade")
 
     if (status === "failed") {
