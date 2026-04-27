@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Check, Crown, Zap } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,12 +25,10 @@ const FREE_FEATURES = [
 
 const PREMIUM_FEATURES = FREE_FEATURES.map((f) => ({ ...f, included: true }))
 
-export default function UpgradePage() {
-  const { user, refetchUser } = useAuth()
+function CheckoutStatusToast() {
+  const { refetchUser } = useAuth()
   const { toast } = useToast()
   const searchParams = useSearchParams()
-  const [loading, setLoading] = useState(false)
-  const isPremium = user?.subscriptionTier === "premium"
 
   useEffect(() => {
     const status = searchParams.get("status")
@@ -41,6 +39,15 @@ export default function UpgradePage() {
       toast({ title: "Pembayaran gagal", description: "Silakan coba lagi.", variant: "destructive" })
     }
   }, [searchParams, toast, refetchUser])
+
+  return null
+}
+
+export default function UpgradePage() {
+  const { user, refetchUser } = useAuth()
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const isPremium = user?.subscriptionTier === "premium"
 
   async function handleUpgrade(plan: "monthly" | "yearly") {
     setLoading(true)
@@ -82,6 +89,9 @@ export default function UpgradePage() {
 
   return (
     <div className="space-y-6">
+      <Suspense fallback={null}>
+        <CheckoutStatusToast />
+      </Suspense>
       <div className="text-center">
         <Badge variant="secondary" className="mb-3"><Crown className="h-3 w-3 mr-1" />Pilih Plan</Badge>
         <h1 className="text-2xl font-bold">Upgrade ke Premium</h1>
