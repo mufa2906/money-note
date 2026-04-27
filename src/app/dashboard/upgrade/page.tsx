@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Check, Crown, Zap } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -27,23 +28,37 @@ const PREMIUM_FEATURES = FREE_FEATURES.map((f) => ({ ...f, included: true }))
 export default function UpgradePage() {
   const { user, refetchUser } = useAuth()
   const { toast } = useToast()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const isPremium = user?.subscriptionTier === "premium"
 
-  async function handleUpgrade(plan: string) {
+  useEffect(() => {
+    const status = searchParams.get("status")
+    if (status === "success") {
+      toast({ title: "Pembayaran diterima", description: "Akun Premium aktif setelah konfirmasi (biasanya beberapa detik)." })
+      refetchUser()
+    } else if (status === "failed") {
+      toast({ title: "Pembayaran gagal", description: "Silakan coba lagi.", variant: "destructive" })
+    }
+  }, [searchParams, toast, refetchUser])
+
+  async function handleUpgrade(plan: "monthly" | "yearly") {
     setLoading(true)
     try {
-      const res = await fetch("/api/user", {
-        method: "PATCH",
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriptionTier: "premium" }),
+        body: JSON.stringify({ plan }),
       })
-      if (!res.ok) throw new Error("Gagal upgrade")
-      await refetchUser()
-      toast({ title: "Berhasil Upgrade!", description: `Akun kamu sekarang Premium (${plan}). Nikmati semua fitur!` })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? "Gagal membuat pembayaran")
+      }
+      const { invoiceUrl } = await res.json()
+      if (!invoiceUrl) throw new Error("URL pembayaran tidak tersedia")
+      window.location.href = invoiceUrl
     } catch (e) {
-      toast({ title: "Gagal", description: String(e), variant: "destructive" })
-    } finally {
+      toast({ title: "Gagal", description: e instanceof Error ? e.message : String(e), variant: "destructive" })
       setLoading(false)
     }
   }
@@ -127,10 +142,10 @@ export default function UpgradePage() {
             ))}
             {!isPremium ? (
               <div className="space-y-2 mt-4">
-                <Button className="w-full" onClick={() => handleUpgrade("Bulanan")} disabled={loading}>
+                <Button className="w-full" onClick={() => handleUpgrade("monthly")} disabled={loading}>
                   <Zap className="h-4 w-4 mr-1.5" />Mulai Premium — Rp 49.000/bln
                 </Button>
-                <Button variant="outline" className="w-full" onClick={() => handleUpgrade("Tahunan")} disabled={loading}>
+                <Button variant="outline" className="w-full" onClick={() => handleUpgrade("yearly")} disabled={loading}>
                   Bayar Tahunan — Rp 469.000/thn
                 </Button>
               </div>
@@ -146,7 +161,7 @@ export default function UpgradePage() {
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        Pembayaran aman via Midtrans. Batalkan kapan saja. Data kamu tetap aman.
+        Pembayaran aman via Xendit. Batalkan kapan saja. Data kamu tetap aman.
       </p>
     </div>
   )
