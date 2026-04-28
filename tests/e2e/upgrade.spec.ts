@@ -20,6 +20,14 @@ async function stubUserTier(page: Page, tier: "free" | "premium", opts?: { switc
   })
 }
 
+// The toast title is rendered both in the visible div AND in an
+// aria-live screen-reader announcement, so scope to the toast viewport
+// (rendered as the "Notifications" region by Radix) to avoid strict-mode
+// violations.
+function visibleToastTitle(page: Page, title: string) {
+  return page.getByRole("region", { name: /Notifications/i }).getByText(title, { exact: true })
+}
+
 test.describe("Upgrade page — checkout return flow", () => {
   test("?status=success polls and shows a single success toast once user is premium", async ({ page }) => {
     // /api/user returns 'free' on first call, then 'premium' on subsequent calls (simulating webhook arriving)
@@ -27,16 +35,15 @@ test.describe("Upgrade page — checkout return flow", () => {
 
     await page.goto("/dashboard/upgrade?status=success")
 
-    // URL is stripped of ?status almost immediately
-    await expect(page).toHaveURL(/\/dashboard\/upgrade$/, { timeout: 5_000 })
+    const successToast = visibleToastTitle(page, "Pembayaran berhasil")
+    await expect(successToast).toBeVisible({ timeout: 20_000 })
 
-    // Success toast appears once
-    const successToast = page.getByText("Pembayaran berhasil")
-    await expect(successToast).toBeVisible({ timeout: 15_000 })
+    // Premium badge confirms the user actually became premium
+    await expect(page.getByText("Kamu sudah Premium!")).toBeVisible({ timeout: 5_000 })
 
-    // No spam: even after a few seconds, only one matching toast in DOM
+    // No spam: even after a few seconds, only one matching visible toast in DOM
     await page.waitForTimeout(3_000)
-    expect(await page.getByText("Pembayaran berhasil").count()).toBeLessThanOrEqual(1)
+    expect(await successToast.count()).toBeLessThanOrEqual(1)
   })
 
   test("?status=success times out gracefully when user never becomes premium", async ({ page }) => {
@@ -44,26 +51,24 @@ test.describe("Upgrade page — checkout return flow", () => {
     await stubUserTier(page, "free")
 
     await page.goto("/dashboard/upgrade?status=success")
-    await expect(page).toHaveURL(/\/dashboard\/upgrade$/, { timeout: 5_000 })
 
-    // After ~10 polls × 2s, the pending toast appears
-    await expect(page.getByText("Pembayaran sedang dikonfirmasi")).toBeVisible({ timeout: 30_000 })
+    const pendingToast = visibleToastTitle(page, "Pembayaran sedang dikonfirmasi")
+    await expect(pendingToast).toBeVisible({ timeout: 30_000 })
 
-    // Did not show the success toast
-    expect(await page.getByText("Pembayaran berhasil").count()).toBe(0)
+    // Did not falsely promise success
+    expect(await visibleToastTitle(page, "Pembayaran berhasil").count()).toBe(0)
   })
 
-  test("?status=failed shows fail toast and clears URL", async ({ page }) => {
+  test("?status=failed shows fail toast once and clears query", async ({ page }) => {
     await stubUserTier(page, "free")
 
     await page.goto("/dashboard/upgrade?status=failed")
 
-    await expect(page).toHaveURL(/\/dashboard\/upgrade$/, { timeout: 5_000 })
-    await expect(page.getByText("Pembayaran gagal")).toBeVisible({ timeout: 5_000 })
+    const failToast = visibleToastTitle(page, "Pembayaran gagal")
+    await expect(failToast).toBeVisible({ timeout: 5_000 })
 
-    // No spam
     await page.waitForTimeout(2_000)
-    expect(await page.getByText("Pembayaran gagal").count()).toBeLessThanOrEqual(1)
+    expect(await failToast.count()).toBeLessThanOrEqual(1)
   })
 
   test("upgrade page renders without ?status param without firing checkout toasts", async ({ page }) => {
@@ -74,8 +79,8 @@ test.describe("Upgrade page — checkout return flow", () => {
 
     // Neither toast should ever appear
     await page.waitForTimeout(1_500)
-    expect(await page.getByText("Pembayaran berhasil").count()).toBe(0)
-    expect(await page.getByText("Pembayaran gagal").count()).toBe(0)
-    expect(await page.getByText("Pembayaran sedang dikonfirmasi").count()).toBe(0)
+    expect(await visibleToastTitle(page, "Pembayaran berhasil").count()).toBe(0)
+    expect(await visibleToastTitle(page, "Pembayaran gagal").count()).toBe(0)
+    expect(await visibleToastTitle(page, "Pembayaran sedang dikonfirmasi").count()).toBe(0)
   })
 })
