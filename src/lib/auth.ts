@@ -41,6 +41,10 @@ export const auth = betterAuth({
         type: "string",
         required: false,
       },
+      telegramPending: {
+        type: "string",
+        required: false,
+      },
     },
   },
   session: {
