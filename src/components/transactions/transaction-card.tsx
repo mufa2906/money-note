@@ -8,6 +8,8 @@ import { CurrencyDisplay } from "@/components/common/currency-display"
 import { formatDate } from "@/lib/utils"
 import { CATEGORY_MAP } from "@/lib/constants"
 import { useToast } from "@/lib/hooks/use-toast"
+import { useTransactions } from "@/lib/hooks/use-transactions"
+import { useAccounts } from "@/lib/hooks/use-accounts"
 import type { Transaction } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -19,12 +21,15 @@ interface TransactionCardProps {
 export function TransactionCard({ transaction: t, onDeleted }: TransactionCardProps) {
   const cat = CATEGORY_MAP[t.category]
   const { toast } = useToast()
+  const { refetch: refetchTransactions } = useTransactions()
+  const { refetch: refetchAccounts } = useAccounts()
 
   async function handleDelete() {
     try {
       const res = await fetch(`/api/transactions?id=${t.id}`, { method: "DELETE" })
       if (!res.ok) throw new Error("Gagal menghapus")
       toast({ title: "Transaksi dihapus", description: t.description })
+      await Promise.all([refetchTransactions(), refetchAccounts()])
       onDeleted?.()
     } catch (e) {
       toast({ title: "Gagal", description: String(e), variant: "destructive" })

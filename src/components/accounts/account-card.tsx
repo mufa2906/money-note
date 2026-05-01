@@ -8,6 +8,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { formatCurrency } from "@/lib/utils"
 import type { Account } from "@/types"
 import { useToast } from "@/lib/hooks/use-toast"
+import { useAccounts } from "@/lib/hooks/use-accounts"
+import { useTransactions } from "@/lib/hooks/use-transactions"
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Building2, Wallet, Banknote,
@@ -26,12 +28,15 @@ interface AccountCardProps {
 export function AccountCard({ account: acc, onDeleted, onEdit }: AccountCardProps) {
   const Icon = ICON_MAP[acc.icon] ?? Wallet
   const { toast } = useToast()
+  const { refetch: refetchAccounts } = useAccounts()
+  const { refetch: refetchTransactions } = useTransactions()
 
   async function handleDelete() {
     try {
       const res = await fetch(`/api/accounts?id=${acc.id}`, { method: "DELETE" })
       if (!res.ok) throw new Error("Gagal menghapus akun")
       toast({ title: "Akun dihapus", description: `${acc.accountName} telah dihapus.` })
+      await Promise.all([refetchAccounts(), refetchTransactions()])
       onDeleted?.()
     } catch (e) {
       toast({ title: "Gagal", description: String(e), variant: "destructive" })

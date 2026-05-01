@@ -10,6 +10,7 @@ interface AuthUser {
   email: string
   image?: string | null
   subscriptionTier: SubscriptionTier
+  subscriptionEndsAt?: string | null
   telegramId?: string | null
   waId?: string | null
   verificationCode?: string | null
@@ -30,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refetchUser = useCallback(async () => {
     try {
-      const res = await fetch("/api/user")
+      const res = await fetch("/api/user", { cache: "no-store" })
       if (res.ok) {
         const data = await res.json()
         setUser({
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: data.email,
           image: data.image,
           subscriptionTier: (data.subscriptionTier as SubscriptionTier) ?? "free",
+          subscriptionEndsAt: data.subscriptionEndsAt ?? null,
           telegramId: data.telegramId,
           waId: data.waId,
           verificationCode: data.verificationCode,
@@ -51,23 +53,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (session?.user) {
-      setUser({
-        id: session.user.id,
-        name: session.user.name,
-        email: session.user.email,
-        image: session.user.image,
-        subscriptionTier: ((session.user as Record<string, unknown>).subscriptionTier as SubscriptionTier) ?? "free",
-        telegramId: (session.user as Record<string, unknown>).telegramId as string | null,
-        waId: (session.user as Record<string, unknown>).waId as string | null,
-        verificationCode: (session.user as Record<string, unknown>).verificationCode as string | null,
-      })
+      // Always trust the database over the (cached) session cookie for fields like
+      // subscriptionTier that can change outside of the auth flow.
+      refetchUser()
     } else if (!isPending) {
       setUser(null)
     }
-  }, [session, isPending])
+  }, [session?.user?.id, isPending, refetchUser])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading: isPending, isAuthenticated: !!user, refetchUser }}>
+    <AuthContext.Provider value={{ user, isLoading: isPending, isAuthenticated: !!session?.user, refetchUser }}>
       {children}
     </AuthContext.Provider>
   )

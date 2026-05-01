@@ -57,9 +57,9 @@ function CheckoutStatusToast() {
       if (cancelled) return
       attempts += 1
       try {
-        const res = await fetch("/api/user", { cache: "no-store" })
-        if (res.ok) {
-          const data = await res.json()
+        const verifyRes = await fetch("/api/billing/verify", { method: "POST", cache: "no-store" })
+        if (verifyRes.ok) {
+          const data = await verifyRes.json()
           if (data.subscriptionTier === "premium") {
             await refetchUser()
             toast({ title: "Pembayaran berhasil", description: "Akun kamu sekarang Premium. Selamat menikmati!" })
@@ -90,10 +90,13 @@ function CheckoutStatusToast() {
 }
 
 export default function UpgradePage() {
-  const { user, refetchUser } = useAuth()
+  const { user } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const isPremium = user?.subscriptionTier === "premium"
+  const premiumEndsAt = user?.subscriptionEndsAt
+    ? new Date(user.subscriptionEndsAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+    : null
 
   async function handleUpgrade(plan: "monthly" | "yearly") {
     setLoading(true)
@@ -112,23 +115,6 @@ export default function UpgradePage() {
       window.location.href = invoiceUrl
     } catch (e) {
       toast({ title: "Gagal", description: e instanceof Error ? e.message : String(e), variant: "destructive" })
-      setLoading(false)
-    }
-  }
-
-  async function handleDowngrade() {
-    setLoading(true)
-    try {
-      await fetch("/api/user", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscriptionTier: "free" }),
-      })
-      await refetchUser()
-      toast({ title: "Downgrade berhasil", description: "Akunmu kembali ke tier Gratis." })
-    } catch (e) {
-      toast({ title: "Gagal", description: String(e), variant: "destructive" })
-    } finally {
       setLoading(false)
     }
   }
@@ -166,11 +152,6 @@ export default function UpgradePage() {
                 <span className={f.included ? "" : "text-muted-foreground"}>{f.label}</span>
               </div>
             ))}
-            {isPremium && (
-              <Button variant="outline" className="w-full mt-4" onClick={handleDowngrade} disabled={loading}>
-                Downgrade ke Gratis
-              </Button>
-            )}
           </CardContent>
         </Card>
 
@@ -206,10 +187,15 @@ export default function UpgradePage() {
                 </Button>
               </div>
             ) : (
-              <div className="mt-4 text-center">
+              <div className="mt-4 text-center space-y-2">
                 <Badge variant="default" className="text-sm px-4 py-1.5">
                   <Check className="h-3.5 w-3.5 mr-1.5" />Aktif
                 </Badge>
+                {premiumEndsAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Berlaku hingga {premiumEndsAt}. Otomatis kembali ke Gratis setelah berakhir.
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
@@ -217,7 +203,7 @@ export default function UpgradePage() {
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        Pembayaran aman via Xendit. Batalkan kapan saja. Data kamu tetap aman.
+        Pembayaran aman via Xendit. Premium aktif sesuai periode yang dibayar, lalu otomatis kembali ke Gratis.
       </p>
     </div>
   )

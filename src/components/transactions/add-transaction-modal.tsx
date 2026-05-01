@@ -14,10 +14,12 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
+import { AmountInput } from "@/components/common/amount-input"
 import { cn } from "@/lib/utils"
 import { CATEGORIES } from "@/lib/constants"
 import { useToast } from "@/lib/hooks/use-toast"
 import { useAccounts } from "@/lib/hooks/use-accounts"
+import { useTransactions } from "@/lib/hooks/use-transactions"
 
 const schema = z.object({
   type: z.enum(["income", "expense"]),
@@ -38,7 +40,8 @@ interface AddTransactionModalProps {
 
 export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransactionModalProps) {
   const { toast } = useToast()
-  const { accounts } = useAccounts()
+  const { accounts, refetch: refetchAccounts } = useAccounts()
+  const { refetch: refetchTransactions } = useTransactions()
   const [calOpen, setCalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -74,6 +77,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
       })
       form.reset({ type: "expense", date: new Date() })
       onOpenChange(false)
+      await Promise.all([refetchTransactions(), refetchAccounts()])
       onSuccess?.()
     } catch (e) {
       toast({ title: "Gagal", description: String(e), variant: "destructive" })
@@ -109,8 +113,13 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="amount">Jumlah (Rp)</Label>
-            <Input id="amount" type="number" placeholder="50000" inputMode="numeric" {...form.register("amount")} />
+            <Label htmlFor="amount">Jumlah</Label>
+            <AmountInput
+              id="amount"
+              placeholder="50.000"
+              value={form.watch("amount") ?? ""}
+              onChange={(raw) => form.setValue("amount", raw, { shouldValidate: true })}
+            />
             {form.formState.errors.amount && (
               <p className="text-xs text-destructive">{form.formState.errors.amount.message}</p>
             )}

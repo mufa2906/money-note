@@ -4,15 +4,29 @@ import { walletAccount } from "@/lib/schema"
 import { eq } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
 
+const DEFAULT_ACCOUNT = {
+  accountType: "cash" as const,
+  accountName: "Tunai",
+  balance: 0,
+  color: "#16a34a",
+  icon: "Banknote",
+}
+
+async function ensureDefaultAccount(userId: string) {
+  const existing = await db.select().from(walletAccount).where(eq(walletAccount.userId, userId))
+  if (existing.length > 0) return existing
+  const [created] = await db
+    .insert(walletAccount)
+    .values({ id: generateId(), userId, ...DEFAULT_ACCOUNT })
+    .returning()
+  return [created]
+}
+
 export async function GET(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
 
-  const accounts = await db
-    .select()
-    .from(walletAccount)
-    .where(eq(walletAccount.userId, session.user.id))
-
+  const accounts = await ensureDefaultAccount(session.user.id)
   return NextResponse.json(accounts)
 }
 

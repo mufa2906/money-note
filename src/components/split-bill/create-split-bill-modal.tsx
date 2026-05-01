@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AmountInput } from "@/components/common/amount-input"
 import { useToast } from "@/lib/hooks/use-toast"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { formatCurrency } from "@/lib/utils"
@@ -92,14 +93,12 @@ export function CreateSplitBillModal({ open, onOpenChange, onSuccess }: CreateSp
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="split-amount">Jumlah Tagihan (Rp)</Label>
-            <Input
+            <Label htmlFor="split-amount">Jumlah Tagihan</Label>
+            <AmountInput
               id="split-amount"
-              type="number"
-              inputMode="numeric"
-              placeholder={selectedTxn ? String(Math.round(selectedTxn.amount / 2)) : "50000"}
+              placeholder={selectedTxn ? String(Math.round(selectedTxn.amount / 2)) : "50.000"}
               value={splitAmount}
-              onChange={(e) => setSplitAmount(e.target.value)}
+              onChange={setSplitAmount}
               required
             />
             {selectedTxn && splitAmount && (

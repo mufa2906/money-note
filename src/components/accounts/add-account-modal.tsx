@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AmountInput } from "@/components/common/amount-input"
 import { useToast } from "@/lib/hooks/use-toast"
+import { useAccounts } from "@/lib/hooks/use-accounts"
 
 const ACCOUNT_TYPES = [
   { value: "bank", label: "Bank" },
@@ -24,6 +26,7 @@ interface AddAccountModalProps {
 
 export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountModalProps) {
   const { toast } = useToast()
+  const { refetch: refetchAccounts } = useAccounts()
   const [submitting, setSubmitting] = useState(false)
   const [accountType, setAccountType] = useState("")
   const [accountName, setAccountName] = useState("")
@@ -44,6 +47,7 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
       toast({ title: "Akun ditambahkan!", description: `${accountName} berhasil ditambahkan.` })
       setAccountType(""); setAccountName(""); setBalance(""); setColor(PRESET_COLORS[0])
       onOpenChange(false)
+      await refetchAccounts()
       onSuccess?.()
     } catch (e) {
       toast({ title: "Gagal", description: String(e), variant: "destructive" })
@@ -73,8 +77,8 @@ export function AddAccountModal({ open, onOpenChange, onSuccess }: AddAccountMod
             <Input id="accountName" placeholder="BCA, GoPay, Dompet, dll." value={accountName} onChange={(e) => setAccountName(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="balance">Saldo Awal (Rp)</Label>
-            <Input id="balance" type="number" inputMode="numeric" placeholder="0" value={balance} onChange={(e) => setBalance(e.target.value)} />
+            <Label htmlFor="balance">Saldo Awal</Label>
+            <AmountInput id="balance" placeholder="0" value={balance} onChange={setBalance} />
           </div>
           <div className="space-y-1">
             <Label>Warna</Label>

@@ -70,3 +70,17 @@ export function verifyXenditWebhook(callbackToken: string | null): boolean {
   if (!callbackToken) return false
   return callbackToken === expected
 }
+
+export async function getXenditInvoice(invoiceId: string): Promise<XenditInvoice> {
+  const secret = getSecretKey()
+  const auth = Buffer.from(`${secret}:`).toString("base64")
+  const res = await fetch(`${XENDIT_API_BASE}/v2/invoices/${invoiceId}`, {
+    headers: { Authorization: `Basic ${auth}` },
+    cache: "no-store",
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Xendit invoice fetch failed (${res.status}): ${text}`)
+  }
+  return res.json()
+}

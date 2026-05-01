@@ -5,7 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AmountInput } from "@/components/common/amount-input"
 import { useToast } from "@/lib/hooks/use-toast"
+import { useAccounts } from "@/lib/hooks/use-accounts"
 import type { Account } from "@/types"
 
 const PRESET_COLORS = ["#1e40af", "#16a34a", "#92400e", "#7c3aed", "#b45309", "#0891b2"]
@@ -19,6 +21,7 @@ interface EditAccountModalProps {
 
 export function EditAccountModal({ account, open, onOpenChange, onSuccess }: EditAccountModalProps) {
   const { toast } = useToast()
+  const { refetch: refetchAccounts } = useAccounts()
   const [submitting, setSubmitting] = useState(false)
   const [accountName, setAccountName] = useState("")
   const [balance, setBalance] = useState("")
@@ -45,6 +48,7 @@ export function EditAccountModal({ account, open, onOpenChange, onSuccess }: Edi
       if (!res.ok) throw new Error("Gagal menyimpan perubahan")
       toast({ title: "Akun diperbarui!", description: `${accountName} berhasil diperbarui.` })
       onOpenChange(false)
+      await refetchAccounts()
       onSuccess?.()
     } catch (e) {
       toast({ title: "Gagal", description: String(e), variant: "destructive" })
@@ -65,8 +69,8 @@ export function EditAccountModal({ account, open, onOpenChange, onSuccess }: Edi
             <Input id="edit-name" value={accountName} onChange={(e) => setAccountName(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-balance">Saldo (Rp)</Label>
-            <Input id="edit-balance" type="number" inputMode="numeric" value={balance} onChange={(e) => setBalance(e.target.value)} />
+            <Label htmlFor="edit-balance">Saldo</Label>
+            <AmountInput id="edit-balance" value={balance} onChange={setBalance} />
           </div>
           <div className="space-y-1">
             <Label>Warna</Label>
