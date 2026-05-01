@@ -3,8 +3,27 @@ import { and, desc, eq, gte, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { user, walletAccount, transaction, splitBill, notification } from "@/lib/schema"
 import { generateId } from "@/lib/api-auth"
-import { sendTelegramMessage, verifyTelegramSecret, type TelegramUpdate } from "@/lib/telegram"
+import {
+  sendTelegramMessage,
+  sendTelegramWithKeyboard,
+  editTelegramMessage,
+  answerCallbackQuery,
+  verifyTelegramSecret,
+  type TelegramUpdate,
+} from "@/lib/telegram"
 import { formatCurrency } from "@/lib/utils"
+
+const CAT_ROWS = [
+  ["makanan", "transportasi", "belanja"],
+  ["hiburan", "tagihan", "kesehatan"],
+  ["pendidikan", "gaji", "lainnya"],
+]
+
+const CAT_LABELS: Record<string, string> = {
+  makanan: "Makanan", transportasi: "Transportasi", belanja: "Belanja",
+  hiburan: "Hiburan", tagihan: "Tagihan", kesehatan: "Kesehatan",
+  pendidikan: "Pendidikan", gaji: "Gaji", lainnya: "Lainnya",
+}
 
 export async function POST(request: NextRequest) {
   if (!verifyTelegramSecret(request.headers.get("x-telegram-bot-api-secret-token"))) {
@@ -12,18 +31,23 @@ export async function POST(request: NextRequest) {
   }
 
   const update = (await request.json().catch(() => null)) as TelegramUpdate | null
-  const message = update?.message
-  const chatId = message?.chat.id
-  const text = message?.text?.trim()
-
-  if (!chatId || !text) return NextResponse.json({ ok: true })
+  if (!update) return NextResponse.json({ ok: true })
 
   try {
+    if (update.callback_query) {
+      await handleCategoryCallback(update.callback_query)
+      return NextResponse.json({ ok: true })
+    }
+
+    const message = update.message
+    const chatId = message?.chat.id
+    const text = message?.text?.trim()
+    if (!chatId || !text) return NextResponse.json({ ok: true })
+
     const reply = await handleCommand(chatId, text)
     if (reply) await sendTelegramMessage(chatId, reply)
   } catch (e) {
     console.error("Telegram handler error:", e)
-    await sendTelegramMessage(chatId, "Maaf, terjadi kesalahan. Coba lagi sebentar.")
   }
 
   return NextResponse.json({ ok: true })
@@ -49,7 +73,7 @@ async function handleCommand(chatId: number, text: string): Promise<string | nul
     case "/saldo":
       return handleBalance(linked.id)
     case "/catat":
-      return handleRecord(linked.id, args)
+      return handleRecord(linked.id, chatId, args)
     case "/ringkasan":
       return handleSummary(linked.id)
     case "/tagihan":
@@ -58,10 +82,7 @@ async function handleCommand(chatId: number, text: string): Promise<string | nul
     case "/help":
       return helpMessage()
     default:
-      return [
-        "Perintah tidak dikenal.",
-        helpMessage(),
-      ].join("\n\n")
+      return ["Perintah tidak dikenal.", helpMessage()].join("\n\n")
   }
 }
 
@@ -69,14 +90,11 @@ function helpMessage(): string {
   return [
     "<b>Perintah MoneyNote Bot:</b>",
     "<code>/saldo</code> — total saldo semua akun",
-    "<code>/catat 50000 makan siang</code> — catat pengeluaran (kategori otomatis)",
-    "<code>/catat makanan 50000 makan siang</code> — dengan kategori eksplisit",
+    "<code>/catat 50000 makan siang</code> — catat pengeluaran (pilih kategori lewat tombol)",
     "<code>/catat masuk 1000000 gaji bulanan</code> — catat pemasukan",
     "<code>/ringkasan</code> — ringkasan bulan ini",
     "<code>/tagihan</code> — daftar bagi tagihan belum lunas",
     "<code>/bantuan</code> — tampilkan pesan ini",
-    "",
-    "Kategori: makanan, transportasi, belanja, hiburan, tagihan, kesehatan, pendidikan, gaji, lainnya",
   ].join("\n")
 }
 
@@ -192,21 +210,18 @@ function parseRecord(args: string): ParsedRecord | null {
   return { type, category, amount, description }
 }
 
-async function handleRecord(userId: string, args: string): Promise<string> {
+async function handleRecord(userId: string, chatId: number, args: string): Promise<string | null> {
   const parsed = parseRecord(args)
   if (!parsed) {
     return [
       "Format salah. Contoh:",
-      "<code>/catat 50000 makan siang</code> — pengeluaran, kategori otomatis",
-      "<code>/catat makanan 50000 makan siang</code> — dengan kategori",
-      "<code>/catat masuk 1000000 gaji bulanan</code> — pemasukan",
-      "",
-      "Kategori: makanan, transportasi, belanja, hiburan, tagihan, kesehatan, pendidikan, gaji, lainnya",
+      "<code>/catat 50000 makan siang</code>",
+      "<code>/catat masuk 1000000 gaji bulanan</code>",
     ].join("\n")
   }
+
   const { type, amount, description } = parsed
-  const category = parsed.category ?? detectCategory(description, type)
-  if (!Number.isFinite(amount) || amount <= 0) return "Jumlah harus angka lebih dari 0."
+  const autoCategory = parsed.category ?? detectCategory(description, type)
 
   const [account] = await db
     .select()
@@ -216,37 +231,94 @@ async function handleRecord(userId: string, args: string): Promise<string> {
     .limit(1)
   if (!account) return "Belum ada akun. Tambahkan akun lewat aplikasi dulu."
 
+  await db
+    .update(user)
+    .set({
+      telegramPending: JSON.stringify({ type, amount, description, accountId: account.id, accountName: account.accountName }),
+      updatedAt: new Date(),
+    })
+    .where(eq(user.telegramId, String(chatId)))
+
+  const keyboard = CAT_ROWS.map((row) =>
+    row.map((val) => ({
+      text: val === autoCategory ? `✓ ${CAT_LABELS[val]}` : CAT_LABELS[val],
+      callback_data: `cat:${val}`,
+    }))
+  )
+
+  const header = type === "income"
+    ? `Pemasukan <b>${formatCurrency(amount)}</b>`
+    : `Pengeluaran <b>${formatCurrency(amount)}</b>`
+
+  await sendTelegramWithKeyboard(
+    chatId,
+    `${header} — ${escapeHtml(description)}\nAkun: ${escapeHtml(account.accountName)}\n\nPilih kategori:`,
+    keyboard,
+  )
+  return null
+}
+
+async function handleCategoryCallback(cb: NonNullable<TelegramUpdate["callback_query"]>) {
+  const chatId = cb.message?.chat.id
+  const messageId = cb.message?.message_id
+  const category = cb.data?.startsWith("cat:") ? cb.data.slice(4) : null
+
+  await answerCallbackQuery(cb.id)
+
+  if (!chatId || !messageId || !category) return
+
+  const linked = await getLinkedUser(chatId)
+  if (!linked?.telegramPending) {
+    await editTelegramMessage(chatId, messageId, "Sesi kedaluwarsa. Ulangi dengan /catat.")
+    return
+  }
+
+  const pending = JSON.parse(linked.telegramPending) as {
+    type: "income" | "expense"
+    amount: number
+    description: string
+    accountId: string
+    accountName: string
+  }
+
   const today = new Date().toISOString().slice(0, 10)
   await db.insert(transaction).values({
     id: generateId(),
-    userId,
-    walletAccountId: account.id,
-    amount,
-    type,
+    userId: linked.id,
+    walletAccountId: pending.accountId,
+    amount: pending.amount,
+    type: pending.type,
     category,
-    description,
+    description: pending.description,
     transactionDate: today,
     source: "bot",
   })
-  const delta = type === "income" ? amount : -amount
+
+  const delta = pending.type === "income" ? pending.amount : -pending.amount
   await db
     .update(walletAccount)
     .set({ balance: sql`${walletAccount.balance} + ${delta}` })
-    .where(eq(walletAccount.id, account.id))
+    .where(eq(walletAccount.id, pending.accountId))
+
+  await db
+    .update(user)
+    .set({ telegramPending: null, updatedAt: new Date() })
+    .where(eq(user.id, linked.id))
 
   await db.insert(notification).values({
     id: generateId(),
-    userId,
+    userId: linked.id,
     kind: "transaction_added",
-    title: type === "income" ? "Pemasukan via Telegram" : "Pengeluaran via Telegram",
-    body: `${description} — ${formatCurrency(amount)}`,
+    title: pending.type === "income" ? "Pemasukan via Telegram" : "Pengeluaran via Telegram",
+    body: `${pending.description} — ${formatCurrency(pending.amount)}`,
   })
 
-  return [
-    type === "income" ? "✅ Pemasukan dicatat" : "✅ Pengeluaran dicatat",
-    `${escapeHtml(description)} — <b>${formatCurrency(amount)}</b>`,
-    `Kategori: ${category} | Akun: ${escapeHtml(account.accountName)}`,
-  ].join("\n")
+  const catLabel = CAT_LABELS[category] ?? category
+  await editTelegramMessage(chatId, messageId, [
+    pending.type === "income" ? "✅ Pemasukan dicatat!" : "✅ Pengeluaran dicatat!",
+    `${escapeHtml(pending.description)} — <b>${formatCurrency(pending.amount)}</b>`,
+    `Kategori: ${catLabel} | Akun: ${escapeHtml(pending.accountName)}`,
+  ].join("\n"))
 }
 
 async function handleSummary(userId: string): Promise<string> {

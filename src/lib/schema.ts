@@ -13,6 +13,7 @@ export const user = sqliteTable("user", {
   telegramId: text("telegram_id"),
   waId: text("wa_id"),
   verificationCode: text("verification_code"),
+  telegramPending: text("telegram_pending"),
 })
 
 export const session = sqliteTable("session", {
