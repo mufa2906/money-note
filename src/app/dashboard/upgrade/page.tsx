@@ -12,15 +12,13 @@ import { useToast } from "@/lib/hooks/use-toast"
 
 const FREE_FEATURES = [
   { label: "Telegram Bot", included: true },
-  { label: "Input manual & import CSV", included: true },
+  { label: "Input manual transaksi", included: true },
   { label: "Notifikasi push standar", included: true },
-  { label: "Kategorisasi AI otomatis", included: true },
-  { label: "Bagi tagihan sederhana", included: true },
+  { label: "Bagi tagihan dasar", included: true },
+  { label: "Wawasan AI dasar (3 kategori)", included: true },
   { label: "WhatsApp Bot", included: false },
-  { label: "Sinkronisasi bank otomatis", included: false },
-  { label: "Deep AI Insights & saran", included: false },
-  { label: "Auto-track bagi tagihan", included: false },
-  { label: "Notifikasi prioritas tinggi", included: false },
+  { label: "Wawasan AI lengkap (semua kategori)", included: false },
+  { label: "Saran AI mendalam", included: false },
 ]
 
 const PREMIUM_FEATURES = FREE_FEATURES.map((f) => ({ ...f, included: true }))

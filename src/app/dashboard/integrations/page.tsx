@@ -4,6 +4,8 @@ import { useState } from "react"
 import { Bot, Copy, Check, ExternalLink, Lock, Crown, MessageCircle, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
@@ -20,6 +22,8 @@ export default function IntegrationsPage() {
   const [copied, setCopied] = useState(false)
   const [telegramLinked, setTelegramLinked] = useState(!!user?.telegramId)
   const [generatingCode, setGeneratingCode] = useState(false)
+  const [waInput, setWaInput] = useState("")
+  const [savingWa, setSavingWa] = useState(false)
 
   function copyCode() {
     if (!verificationCode) return
@@ -58,6 +62,50 @@ export default function IntegrationsPage() {
     await refetchUser()
     setTelegramLinked(false)
     toast({ title: "Telegram diputus", description: "Bot Telegram tidak lagi terhubung." })
+  }
+
+  function normalizePhone(raw: string): string {
+    const digits = raw.replace(/\D/g, "")
+    if (!digits) return ""
+    if (digits.startsWith("0")) return `+62${digits.slice(1)}`
+    if (digits.startsWith("62")) return `+${digits}`
+    if (raw.trim().startsWith("+")) return `+${digits}`
+    return `+62${digits}`
+  }
+
+  async function linkWhatsApp(e: React.FormEvent) {
+    e.preventDefault()
+    const phone = normalizePhone(waInput)
+    if (phone.length < 9) {
+      toast({ title: "Nomor tidak valid", description: "Masukkan nomor WhatsApp yang benar.", variant: "destructive" })
+      return
+    }
+    setSavingWa(true)
+    try {
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waId: phone }),
+      })
+      if (!res.ok) throw new Error("Gagal menyimpan nomor")
+      await refetchUser()
+      setWaInput("")
+      toast({ title: "Nomor WhatsApp tersimpan", description: `Bot akan kirim pesan konfirmasi ke ${phone}.` })
+    } catch (e) {
+      toast({ title: "Gagal", description: e instanceof Error ? e.message : String(e), variant: "destructive" })
+    } finally {
+      setSavingWa(false)
+    }
+  }
+
+  async function unlinkWhatsApp() {
+    await fetch("/api/user", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ waId: null }),
+    })
+    await refetchUser()
+    toast({ title: "WhatsApp diputus", description: "Bot WhatsApp tidak lagi terhubung." })
   }
 
   return (
@@ -169,25 +217,43 @@ export default function IntegrationsPage() {
         </CardHeader>
         <CardContent>
           {isPremium ? (
-            <div className="space-y-3">
-              {user?.waId ? (
+            user?.waId ? (
+              <div className="space-y-3">
                 <Alert>
                   <Check className="h-4 w-4 text-green-500" />
                   <AlertDescription className="text-sm">
-                    <span className="font-medium text-green-600">Terhubung!</span> WhatsApp Bot aktif di {user.waId}.
+                    <span className="font-medium text-green-600">Terhubung!</span> WhatsApp Bot aktif di <span className="font-mono">{user.waId}</span>.
                   </AlertDescription>
                 </Alert>
-              ) : (
+                <Button variant="outline" size="sm" className="w-full" onClick={unlinkWhatsApp}>
+                  Putuskan Koneksi WhatsApp
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={linkWhatsApp} className="space-y-3">
                 <Alert>
                   <AlertDescription className="text-sm">
                     Hubungkan WhatsApp untuk catat transaksi lebih mudah melalui chat WA.
                   </AlertDescription>
                 </Alert>
-              )}
-              <Button className="w-full">
-                {user?.waId ? "Ganti Nomor WhatsApp" : "Hubungkan WhatsApp"}
-              </Button>
-            </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="wa-phone">Nomor WhatsApp</Label>
+                  <Input
+                    id="wa-phone"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="08123456789"
+                    value={waInput}
+                    onChange={(e) => setWaInput(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">Awalan 0 atau +62 diterima.</p>
+                </div>
+                <Button type="submit" className="w-full" disabled={savingWa || !waInput}>
+                  {savingWa ? "Menyimpan..." : "Hubungkan WhatsApp"}
+                </Button>
+              </form>
+            )
           ) : (
             <div className="flex flex-col items-center gap-3 py-4 text-center">
               <Lock className="h-8 w-8 text-muted-foreground" />

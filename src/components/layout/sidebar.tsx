@@ -46,8 +46,10 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex flex-col w-64 h-screen border-r bg-background sticky top-0">
       <div className="flex items-center gap-2 px-4 h-16 border-b">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">M</div>
-        <span className="font-semibold text-lg">MoneyNote</span>
+        <Link href="/dashboard" className="flex items-center gap-2 -mx-1 px-1 py-1 rounded-md hover:bg-accent transition-colors">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">M</div>
+          <span className="font-semibold text-lg">MoneyNote</span>
+        </Link>
         <div className="ml-auto"><ThemeToggle /></div>
       </div>
 

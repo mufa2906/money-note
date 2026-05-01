@@ -16,12 +16,12 @@ export function TopBar() {
 
   return (
     <header className="flex items-center justify-between h-14 px-4 border-b bg-background lg:hidden">
-      <div className="flex items-center gap-2">
+      <Link href="/dashboard" className="flex items-center gap-2 -mx-1 px-1 py-1 rounded-md hover:bg-accent transition-colors">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
           M
         </div>
         <span className="font-semibold">MoneyNote</span>
-      </div>
+      </Link>
       <div className="flex items-center gap-1">
         <ThemeToggle />
         <Button variant="ghost" size="icon" asChild className="relative">
