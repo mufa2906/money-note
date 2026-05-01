@@ -118,8 +118,8 @@ export default function SettingsPage() {
               <div>
                 <p className="font-medium">{user?.name ?? "..."}</p>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
-                <Badge variant={user?.subscriptionTier === "premium" ? "default" : "secondary"} className="mt-1">
-                  {user?.subscriptionTier === "premium" ? <><Crown className="h-3 w-3 mr-1" />Premium</> : "Gratis"}
+                <Badge variant={user?.subscriptionTier !== "free" ? "default" : "secondary"} className="mt-1">
+                  {user?.subscriptionTier === "lifetime" ? <><Crown className="h-3 w-3 mr-1" />Lifetime</> : user?.subscriptionTier === "premium" ? <><Crown className="h-3 w-3 mr-1" />Premium</> : "Gratis"}
                 </Badge>
               </div>
             </div>

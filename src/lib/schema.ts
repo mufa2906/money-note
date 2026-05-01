@@ -9,7 +9,7 @@ export const user = sqliteTable("user", {
   image: text("image"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
-  subscriptionTier: text("subscription_tier", { enum: ["free", "premium"] }).notNull().default("free"),
+  subscriptionTier: text("subscription_tier", { enum: ["free", "premium", "lifetime"] }).notNull().default("free"),
   telegramId: text("telegram_id"),
   waId: text("wa_id"),
   verificationCode: text("verification_code"),

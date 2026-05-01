@@ -86,8 +86,8 @@ export function Sidebar() {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{user?.name ?? "..."}</p>
-            <Badge variant={user?.subscriptionTier === "premium" ? "default" : "outline"} className="text-xs py-0 px-1.5 h-4">
-              {user?.subscriptionTier === "premium" ? "Premium" : "Gratis"}
+            <Badge variant={user?.subscriptionTier !== "free" ? "default" : "outline"} className="text-xs py-0 px-1.5 h-4">
+              {user?.subscriptionTier === "lifetime" ? "Lifetime" : user?.subscriptionTier === "premium" ? "Premium" : "Gratis"}
             </Badge>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />

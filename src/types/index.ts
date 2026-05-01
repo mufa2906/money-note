@@ -1,4 +1,4 @@
-export type SubscriptionTier = "free" | "premium"
+export type SubscriptionTier = "free" | "premium" | "lifetime"
 
 export interface MockUser {
   id: string

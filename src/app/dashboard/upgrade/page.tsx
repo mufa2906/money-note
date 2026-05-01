@@ -58,7 +58,7 @@ function CheckoutStatusToast() {
         const verifyRes = await fetch("/api/billing/verify", { method: "POST", cache: "no-store" })
         if (verifyRes.ok) {
           const data = await verifyRes.json()
-          if (data.subscriptionTier === "premium") {
+          if (data.subscriptionTier !== "free") {
             await refetchUser()
             toast({ title: "Pembayaran berhasil", description: "Akun kamu sekarang Premium. Selamat menikmati!" })
             return
@@ -91,7 +91,7 @@ export default function UpgradePage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const isPremium = user?.subscriptionTier === "premium"
+  const isPremium = user?.subscriptionTier !== "free"
   const premiumEndsAt = user?.subscriptionEndsAt
     ? new Date(user.subscriptionEndsAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
     : null

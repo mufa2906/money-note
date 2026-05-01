@@ -19,7 +19,7 @@ const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "
 export default function IntegrationsPage() {
   const { user, refetchUser } = useAuth()
   const { toast } = useToast()
-  const isPremium = user?.subscriptionTier === "premium"
+  const isPremium = user?.subscriptionTier !== "free"
   const verificationCode = user?.verificationCode
   const [copied, setCopied] = useState(false)
   const [telegramLinked, setTelegramLinked] = useState(!!user?.telegramId)

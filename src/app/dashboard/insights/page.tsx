@@ -37,7 +37,7 @@ const AI_TIPS_PREMIUM = [
 
 export default function InsightsPage() {
   const { user } = useAuth()
-  const isPremium = user?.subscriptionTier === "premium"
+  const isPremium = user?.subscriptionTier !== "free"
   const { transactions, loading } = useTransactions()
 
   const categoryData = useMemo(() => {

@@ -35,7 +35,7 @@ const PERKS = [
 export function PremiumActiveCard() {
   const { user } = useAuth()
   const [expanded, setExpanded] = useState(false)
-  if (user?.subscriptionTier !== "premium") return null
+  if (!user || user.subscriptionTier === "free") return null
 
   const endsAt = user?.subscriptionEndsAt
     ? new Date(user.subscriptionEndsAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
