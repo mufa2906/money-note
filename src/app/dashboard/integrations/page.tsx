@@ -14,6 +14,8 @@ import { useAuth } from "@/providers/auth-provider"
 import Link from "next/link"
 import { useToast } from "@/lib/hooks/use-toast"
 
+const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "MoneyNote01Bot"
+
 export default function IntegrationsPage() {
   const { user, refetchUser } = useAuth()
   const { toast } = useToast()
@@ -164,7 +166,7 @@ export default function IntegrationsPage() {
                   <div className="space-y-2 text-sm">
                     <p className="font-medium">Langkah menghubungkan:</p>
                     <ol className="space-y-2 text-muted-foreground list-decimal pl-4">
-                      <li>Buka Telegram dan cari <span className="font-mono text-foreground">@MoneyNoteBot</span></li>
+                      <li>Buka Telegram dan cari <span className="font-mono text-foreground">@{TELEGRAM_BOT_USERNAME}</span></li>
                       <li>Kirim pesan: <code className="bg-muted rounded px-1 text-foreground">/start {verificationCode}</code></li>
                       <li>Bot akan mengkonfirmasi akunmu berhasil terhubung</li>
                     </ol>
@@ -172,7 +174,7 @@ export default function IntegrationsPage() {
 
                   <div className="flex gap-2">
                     <Button asChild variant="outline" size="sm" className="flex-1">
-                      <a href={`https://t.me/MoneyNoteBot?start=${verificationCode}`} target="_blank" rel="noopener noreferrer">
+                      <a href={`https://t.me/${TELEGRAM_BOT_USERNAME}?start=${verificationCode}`} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="h-4 w-4 mr-1.5" />Buka Telegram
                       </a>
                     </Button>
