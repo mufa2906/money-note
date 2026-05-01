@@ -192,7 +192,7 @@ export default function IntegrationsPage() {
             <p className="text-sm font-medium mb-2">Perintah Bot yang tersedia:</p>
             <div className="grid grid-cols-2 gap-1.5 text-xs">
               {[
-                ["/catat", "Catat transaksi baru"],
+                ["/catat [kategori] 50000 deskripsi", "Catat transaksi baru"],
                 ["/saldo", "Lihat total saldo"],
                 ["/ringkasan", "Ringkasan bulan ini"],
                 ["/tagihan", "Daftar tagihan aktif"],

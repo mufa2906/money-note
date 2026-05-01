@@ -69,11 +69,14 @@ function helpMessage(): string {
   return [
     "<b>Perintah MoneyNote Bot:</b>",
     "<code>/saldo</code> — total saldo semua akun",
-    "<code>/catat 50000 makan siang</code> — catat pengeluaran",
-    "<code>/catat masuk 1000000 gaji</code> — catat pemasukan",
+    "<code>/catat 50000 makan siang</code> — catat pengeluaran (kategori otomatis)",
+    "<code>/catat makanan 50000 makan siang</code> — dengan kategori eksplisit",
+    "<code>/catat masuk 1000000 gaji bulanan</code> — catat pemasukan",
     "<code>/ringkasan</code> — ringkasan bulan ini",
     "<code>/tagihan</code> — daftar bagi tagihan belum lunas",
     "<code>/bantuan</code> — tampilkan pesan ini",
+    "",
+    "Kategori: makanan, transportasi, belanja, hiburan, tagihan, kesehatan, pendidikan, gaji, lainnya",
   ].join("\n")
 }
 
@@ -122,21 +125,87 @@ async function handleBalance(userId: string): Promise<string> {
   return [`<b>Total Saldo: ${formatCurrency(total)}</b>`, "", ...lines].join("\n")
 }
 
-const RECORD_ARG_RE = /^(masuk|income|keluar|expense)?\s*([\d.,]+)\s+(.+)$/i
+const TYPE_WORDS = new Set(["masuk", "income", "keluar", "expense"])
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  makanan: "makanan", makan: "makanan",
+  transportasi: "transportasi", transport: "transportasi", bensin: "transportasi",
+  belanja: "belanja", shopping: "belanja",
+  hiburan: "hiburan",
+  tagihan: "tagihan", bayar: "tagihan",
+  kesehatan: "kesehatan", sehat: "kesehatan", medis: "kesehatan",
+  pendidikan: "pendidikan", belajar: "pendidikan",
+  gaji: "gaji", salary: "gaji",
+  lainnya: "lainnya", lain: "lainnya",
+}
+
+const KEYWORD_CATEGORY: Array<[string[], string]> = [
+  [["makan", "sarapan", "siang", "malam", "kopi", "cafe", "warung", "resto", "jajan", "snack", "cemilan", "bakso", "soto", "nasi", "minuman", "ayam", "pizza", "burger"], "makanan"],
+  [["bensin", "bbm", "ojek", "grab", "gojek", "taxi", "bus", "commuter", "parkir", "tol", "angkot", "kereta", "perjalanan", "transport"], "transportasi"],
+  [["belanja", "beli", "supermarket", "indomaret", "alfamart", "tokopedia", "shopee", "lazada", "groceri"], "belanja"],
+  [["nonton", "bioskop", "netflix", "spotify", "game", "hiburan", "main", "musik", "konser"], "hiburan"],
+  [["tagihan", "listrik", "air", "wifi", "internet", "pulsa", "kuota", "iuran", "cicilan", "kredit", "pdam"], "tagihan"],
+  [["dokter", "obat", "apotek", "rumah sakit", "klinik", "puskesmas", "vitamin", "kesehatan", "periksa"], "kesehatan"],
+  [["sekolah", "kampus", "kuliah", "kursus", "les", "buku", "alat tulis", "spp", "pendidikan"], "pendidikan"],
+  [["gaji", "salary", "bonus", "tunjangan", "freelance", "proyek", "komisi"], "gaji"],
+]
+
+function detectCategory(description: string, type: "income" | "expense"): string {
+  const lower = description.toLowerCase()
+  for (const [keywords, cat] of KEYWORD_CATEGORY) {
+    if (keywords.some((k) => lower.includes(k))) return cat
+  }
+  return type === "income" ? "gaji" : "lainnya"
+}
+
+interface ParsedRecord {
+  type: "income" | "expense"
+  category: string | null
+  amount: number
+  description: string
+}
+
+function parseRecord(args: string): ParsedRecord | null {
+  const parts = args.trim().split(/\s+/)
+  let idx = 0
+
+  let type: "income" | "expense" = "expense"
+  if (parts[idx] && TYPE_WORDS.has(parts[idx].toLowerCase())) {
+    type = parts[idx].toLowerCase() === "masuk" || parts[idx].toLowerCase() === "income" ? "income" : "expense"
+    idx++
+  }
+
+  let category: string | null = null
+  if (parts[idx] && CATEGORY_ALIASES[parts[idx].toLowerCase()]) {
+    category = CATEGORY_ALIASES[parts[idx].toLowerCase()]
+    idx++
+  }
+
+  if (!parts[idx]) return null
+  const amount = Number(parts[idx].replace(/[.,]/g, ""))
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  idx++
+
+  if (!parts[idx]) return null
+  const description = parts.slice(idx).join(" ")
+
+  return { type, category, amount, description }
+}
 
 async function handleRecord(userId: string, args: string): Promise<string> {
-  const match = args.match(RECORD_ARG_RE)
-  if (!match) {
+  const parsed = parseRecord(args)
+  if (!parsed) {
     return [
       "Format salah. Contoh:",
-      "<code>/catat 50000 makan siang</code>",
-      "<code>/catat masuk 1000000 gaji</code>",
+      "<code>/catat 50000 makan siang</code> — pengeluaran, kategori otomatis",
+      "<code>/catat makanan 50000 makan siang</code> — dengan kategori",
+      "<code>/catat masuk 1000000 gaji bulanan</code> — pemasukan",
+      "",
+      "Kategori: makanan, transportasi, belanja, hiburan, tagihan, kesehatan, pendidikan, gaji, lainnya",
     ].join("\n")
   }
-  const typeWord = (match[1] ?? "").toLowerCase()
-  const type: "income" | "expense" = typeWord === "masuk" || typeWord === "income" ? "income" : "expense"
-  const amount = Number(match[2].replace(/[.,]/g, ""))
-  const description = match[3].trim()
+  const { type, amount, description } = parsed
+  const category = parsed.category ?? detectCategory(description, type)
   if (!Number.isFinite(amount) || amount <= 0) return "Jumlah harus angka lebih dari 0."
 
   const [account] = await db
@@ -154,7 +223,7 @@ async function handleRecord(userId: string, args: string): Promise<string> {
     walletAccountId: account.id,
     amount,
     type,
-    category: type === "income" ? "gaji" : "lainnya",
+    category,
     description,
     transactionDate: today,
     source: "bot",
@@ -176,7 +245,7 @@ async function handleRecord(userId: string, args: string): Promise<string> {
   return [
     type === "income" ? "✅ Pemasukan dicatat" : "✅ Pengeluaran dicatat",
     `${escapeHtml(description)} — <b>${formatCurrency(amount)}</b>`,
-    `Akun: ${escapeHtml(account.accountName)}`,
+    `Kategori: ${category} | Akun: ${escapeHtml(account.accountName)}`,
   ].join("\n")
 }
 
