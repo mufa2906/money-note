@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card"
 import { TransactionCard } from "@/components/transactions/transaction-card"
 import { AddTransactionModal } from "@/components/transactions/add-transaction-modal"
+import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal"
 import { EmptyState } from "@/components/common/empty-state"
 import { LoadingSkeleton } from "@/components/common/loading-skeleton"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { CATEGORIES } from "@/lib/constants"
+import type { Transaction } from "@/types"
 
 export default function TransactionsPage() {
   const { transactions, loading, refetch } = useTransactions()
@@ -19,6 +21,7 @@ export default function TransactionsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [addOpen, setAddOpen] = useState(false)
+  const [editTransaction, setEditTransaction] = useState<Transaction | null>(null)
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
@@ -77,12 +80,25 @@ export default function TransactionsPage() {
             ) : filtered.length === 0 ? (
               <EmptyState icon={ArrowLeftRight} title="Tidak ada transaksi" description="Coba ubah filter atau tambah transaksi baru" className="py-10" />
             ) : (
-              filtered.map((t) => <TransactionCard key={t.id} transaction={t} onDeleted={refetch} />)
+              filtered.map((t) => (
+                <TransactionCard
+                  key={t.id}
+                  transaction={t}
+                  onDeleted={refetch}
+                  onEdit={setEditTransaction}
+                />
+              ))
             )}
           </CardContent>
         </Card>
       </div>
       <AddTransactionModal open={addOpen} onOpenChange={setAddOpen} onSuccess={refetch} />
+      <EditTransactionModal
+        transaction={editTransaction}
+        open={!!editTransaction}
+        onOpenChange={(o) => { if (!o) setEditTransaction(null) }}
+        onSuccess={refetch}
+      />
     </>
   )
 }

@@ -57,6 +57,64 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(created, { status: 201 })
 }
 
+export async function PATCH(request: NextRequest) {
+  const { session, error } = await requireAuth(request)
+  if (error) return error
+
+  const body = await request.json()
+  const { id, walletAccountId, amount, type, category, description, transactionDate } = body
+
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
+
+  const [existing] = await db
+    .select()
+    .from(transaction)
+    .where(and(eq(transaction.id, id), eq(transaction.userId, session.user.id)))
+    .limit(1)
+  if (!existing) return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
+
+  const newAmount = amount !== undefined ? Number(amount) : existing.amount
+  const newType = type ?? existing.type
+  const newAccountId = walletAccountId ?? existing.walletAccountId
+
+  const oldDelta = existing.type === "income" ? existing.amount : -existing.amount
+  const newDelta = newType === "income" ? newAmount : -newAmount
+
+  if (newAccountId === existing.walletAccountId) {
+    const diff = newDelta - oldDelta
+    if (diff !== 0) {
+      await db
+        .update(walletAccount)
+        .set({ balance: sql`${walletAccount.balance} + ${diff}` })
+        .where(eq(walletAccount.id, existing.walletAccountId))
+    }
+  } else {
+    await db
+      .update(walletAccount)
+      .set({ balance: sql`${walletAccount.balance} - ${oldDelta}` })
+      .where(eq(walletAccount.id, existing.walletAccountId))
+    await db
+      .update(walletAccount)
+      .set({ balance: sql`${walletAccount.balance} + ${newDelta}` })
+      .where(eq(walletAccount.id, newAccountId))
+  }
+
+  const [updated] = await db
+    .update(transaction)
+    .set({
+      walletAccountId: newAccountId,
+      amount: newAmount,
+      type: newType,
+      category: category ?? existing.category,
+      description: description ?? existing.description,
+      transactionDate: transactionDate ?? existing.transactionDate,
+    })
+    .where(eq(transaction.id, id))
+    .returning()
+
+  return NextResponse.json(updated)
+}
+
 export async function DELETE(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
@@ -65,9 +123,20 @@ export async function DELETE(request: NextRequest) {
   const id = searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
 
-  await db
-    .delete(transaction)
+  const [existing] = await db
+    .select()
+    .from(transaction)
     .where(and(eq(transaction.id, id), eq(transaction.userId, session.user.id)))
+    .limit(1)
+  if (!existing) return NextResponse.json({ success: true })
+
+  const reverseDelta = existing.type === "income" ? -existing.amount : existing.amount
+  await db
+    .update(walletAccount)
+    .set({ balance: sql`${walletAccount.balance} + ${reverseDelta}` })
+    .where(eq(walletAccount.id, existing.walletAccountId))
+
+  await db.delete(transaction).where(eq(transaction.id, id))
 
   return NextResponse.json({ success: true })
 }

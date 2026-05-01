@@ -12,8 +12,8 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold">Beranda</h1>
           <p className="text-sm text-muted-foreground">Selamat datang kembali!</p>
         </div>
-        <PremiumActiveCard />
         <BalanceCard />
+        <PremiumActiveCard />
         <div className="grid gap-4 lg:grid-cols-2">
           <RecentTransactions />
           <AccountSummary />
