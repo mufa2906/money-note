@@ -79,6 +79,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     id: b.id,
     userId: b.userId,
     title: b.title,
+    description: b.description ?? null,
     photoUrl: b.photoUrl,
     charges: parseCharges(b),
     createdAt: b.createdAt,
@@ -99,6 +100,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await request.json().catch(() => ({}))
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   if (typeof body?.title === "string" && body.title.trim()) updates.title = body.title.trim()
+  if (body?.description !== undefined) updates.description = typeof body.description === "string" ? body.description.trim() || null : null
   if (body?.photoUrl !== undefined) updates.photoUrl = body.photoUrl ?? null
   if (body?.charges !== undefined) {
     const sanitized = sanitizeCharges(body.charges)

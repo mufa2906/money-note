@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
         id: b.id,
         userId: b.userId,
         title: b.title,
+        description: b.description ?? null,
         photoUrl: b.photoUrl,
         charges,
         createdAt: b.createdAt,
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
   const title = typeof body?.title === "string" ? body.title.trim() : ""
   if (!title) return NextResponse.json({ error: "title required" }, { status: 400 })
 
+  const description = typeof body?.description === "string" ? body.description.trim() || null : null
   const charges = sanitizeCharges(body?.charges)
 
   const [created] = await db
@@ -72,6 +74,7 @@ export async function POST(request: NextRequest) {
       id: generateId(),
       userId: session.user.id,
       title,
+      description,
       photoUrl: typeof body?.photoUrl === "string" ? body.photoUrl : null,
       charges: JSON.stringify(charges),
     })

@@ -391,6 +391,7 @@ async function handleBills(userId: string): Promise<string> {
       id: b.id,
       userId: b.userId,
       title: b.title,
+      description: b.description ?? null,
       photoUrl: b.photoUrl,
       charges,
       createdAt: String(b.createdAt),

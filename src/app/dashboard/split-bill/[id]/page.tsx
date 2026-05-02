@@ -17,7 +17,7 @@ import { formatCurrency } from "@/lib/utils"
 import type { BillItem, BillParticipant, BillCharge, ParticipantBreakdown, SplitStatus } from "@/types"
 
 interface Mutations {
-  patchBill: (updates: { title?: string; charges?: BillCharge[] }) => Promise<void>
+  patchBill: (updates: { title?: string; description?: string | null; charges?: BillCharge[] }) => Promise<void>
   addItem: (data: { name: string; price: number; qty: number }) => Promise<void>
   updateItem: (itemId: string, updates: { name?: string; price?: number; qty?: number; participantIds?: string[] }) => Promise<void>
   deleteItem: (itemId: string) => Promise<void>
@@ -31,6 +31,7 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
   const { bill, loading, refetch, setBill } = useBill(id)
   const { toast } = useToast()
   const [titleEdit, setTitleEdit] = useState<string | null>(null)
+  const [descEdit, setDescEdit] = useState<string | null>(null)
 
   const breakdowns = useMemo(() => (bill ? computeBreakdown(bill) : []), [bill])
 
@@ -210,6 +211,15 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
     setTitleEdit(null)
   }
 
+  async function saveDesc() {
+    if (descEdit === null) return
+    const trimmed = descEdit.trim() || null
+    if (trimmed !== (bill?.description ?? null)) {
+      await mutations.patchBill({ description: trimmed })
+    }
+    setDescEdit(null)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -235,7 +245,28 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
               <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />
             </button>
           )}
-          <p className="text-xs text-muted-foreground">Total: {formatCurrency(billGrandTotal(bill))}</p>
+          {descEdit !== null ? (
+            <div className="flex items-center gap-1 mt-0.5">
+              <Input
+                value={descEdit}
+                onChange={(e) => setDescEdit(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveDesc() }}
+                placeholder="Tujuan / keterangan..."
+                autoFocus
+                className="h-7 text-xs"
+              />
+              <Button size="icon" className="h-7 w-7" onClick={saveDesc}><Check className="h-3 w-3" /></Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDescEdit(null)}><X className="h-3 w-3" /></Button>
+            </div>
+          ) : (
+            <button onClick={() => setDescEdit(bill.description ?? "")} className="flex items-center gap-1 group mt-0.5">
+              <p className="text-xs text-muted-foreground truncate">
+                {bill.description ? bill.description : <span className="italic">Tambah tujuan...</span>}
+              </p>
+              <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 flex-shrink-0" />
+            </button>
+          )}
+          <p className="text-xs text-muted-foreground mt-0.5">Total: {formatCurrency(billGrandTotal(bill))}</p>
         </div>
       </div>
 

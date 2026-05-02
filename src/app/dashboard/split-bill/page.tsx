@@ -78,7 +78,9 @@ function BillCard({ bill, onDeleted }: { bill: Bill; onDeleted: () => void }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{bill.title}</p>
-              <p className="text-xs text-muted-foreground">{formatDate(bill.createdAt)}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {bill.description ? bill.description : formatDate(bill.createdAt)}
+              </p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </Link>

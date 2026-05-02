@@ -89,6 +89,7 @@ export interface Bill {
   id: string
   userId: string
   title: string
+  description: string | null
   photoUrl: string | null
   charges: BillCharge[]
   createdAt: string

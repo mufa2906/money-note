@@ -90,6 +90,7 @@ export const bill = sqliteTable("bill", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  description: text("description"),
   photoUrl: text("photo_url"),
   serviceCharge: real("service_charge").notNull().default(0),
   tax: real("tax").notNull().default(0),

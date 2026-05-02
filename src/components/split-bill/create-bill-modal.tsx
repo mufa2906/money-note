@@ -18,6 +18,7 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
   const router = useRouter()
   const { toast } = useToast()
   const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -32,12 +33,13 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
       const res = await fetch("/api/bills", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim() }),
+        body: JSON.stringify({ title: title.trim(), description: description.trim() || undefined }),
       })
       if (!res.ok) throw new Error("Gagal membuat")
       const created = await res.json()
       onOpenChange(false)
       setTitle("")
+      setDescription("")
       router.push(`/dashboard/split-bill/${created.id}`)
     } catch (e) {
       toast({ title: "Gagal", description: String(e), variant: "destructive" })
@@ -67,6 +69,7 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim() || parsed.title || "Tagihan tanpa judul",
+          description: description.trim() || undefined,
           charges: parsed.charges ?? [],
         }),
       })
@@ -86,6 +89,7 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
       onOpenChange(false)
       setTitle("")
       toast({ title: "Struk berhasil di-scan", description: `${parsed.items?.length ?? 0} item terdeteksi` })
+      setDescription("")
       router.push(`/dashboard/split-bill/${newBill.id}`)
     } catch (e) {
       toast({ title: "Gagal scan struk", description: String(e), variant: "destructive" })
@@ -108,6 +112,15 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
               placeholder="Makan di Sushi Tei, Belanja Indomaret, dll."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="bill-desc">Tujuan / Keterangan <span className="text-muted-foreground font-normal">(opsional)</span></Label>
+            <Input
+              id="bill-desc"
+              placeholder="Ulang tahun, reuni, dinner kantor, dll."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
