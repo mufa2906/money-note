@@ -67,8 +67,7 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim() || parsed.title || "Tagihan tanpa judul",
-          serviceCharge: parsed.serviceCharge ?? 0,
-          tax: parsed.tax ?? 0,
+          charges: parsed.charges ?? [],
         }),
       })
       if (!billRes.ok) throw new Error("Gagal membuat tagihan")

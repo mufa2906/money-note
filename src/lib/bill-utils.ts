@@ -27,17 +27,16 @@ export function computeBreakdown(bill: BillDetail): ParticipantBreakdown[] {
   return participants.map((p) => {
     const itemsSubtotal = itemsSubtotalByParticipant.get(p.id) ?? 0
     const proportion = billItemsSubtotal > 0 ? itemsSubtotal / billItemsSubtotal : 0
-    const serviceShare = bill.serviceCharge * proportion
-    const taxShare = bill.tax * proportion
+    const chargeShares = bill.charges.map((c) => ({ name: c.name, amount: c.amount * proportion }))
+    const chargesTotal = chargeShares.reduce((s, c) => s + c.amount, 0)
     return {
       participantId: p.id,
       name: p.name,
       contact: p.contact,
       status: p.status,
       itemsSubtotal,
-      serviceShare,
-      taxShare,
-      total: itemsSubtotal + serviceShare + taxShare,
+      chargeShares,
+      total: itemsSubtotal + chargesTotal,
       lineItems: lineItemsByParticipant.get(p.id) ?? [],
     }
   })
@@ -45,5 +44,6 @@ export function computeBreakdown(bill: BillDetail): ParticipantBreakdown[] {
 
 export function billGrandTotal(bill: BillDetail): number {
   const itemsTotal = bill.items.reduce((sum, i) => sum + i.price * i.qty, 0)
-  return itemsTotal + bill.serviceCharge + bill.tax
+  const chargesTotal = bill.charges.reduce((sum, c) => sum + c.amount, 0)
+  return itemsTotal + chargesTotal
 }

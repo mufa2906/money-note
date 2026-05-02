@@ -10,17 +10,18 @@ const PROMPT = `Kamu adalah asisten yang membaca foto struk pembelian (Indonesia
   "items": [
     { "name": "nama menu", "price": <harga satuan dalam Rupiah, integer>, "qty": <jumlah, integer minimal 1> }
   ],
-  "serviceCharge": <total service charge dalam Rupiah, integer, 0 jika tidak ada>,
-  "tax": <total PPN/pajak dalam Rupiah, integer, 0 jika tidak ada>
+  "charges": [
+    { "name": "nama biaya tambahan", "amount": <nominal dalam Rupiah, integer> }
+  ]
 }
 
 Aturan:
 - price = harga satuan, BUKAN total. Jika struk hanya menunjukkan total per baris (qty × harga), bagi total dengan qty.
 - Jika tidak ada qty, asumsikan qty = 1.
-- Hanya item makanan/produk; abaikan diskon, voucher, subtotal, total, kembalian, tunai.
-- Jika ada "service" / "biaya layanan", masukkan ke serviceCharge.
-- Jika ada "PPN" / "PB1" / "tax" / "pajak", masukkan ke tax.
-- Semua harga dalam Rupiah utuh (tanpa desimal).
+- Hanya item makanan/produk di "items"; abaikan diskon, voucher, subtotal, total, kembalian, tunai.
+- "charges" berisi semua biaya tambahan di luar harga item: service charge, PPN, PB1, biaya kemasan, biaya admin, dll. Pakai nama persis seperti tertulis di struk (misal "Service Charge", "PPN 11%", "PB1", "Kemasan").
+- Kalau tidak ada biaya tambahan, "charges": [].
+- Semua nominal dalam Rupiah utuh (tanpa desimal).
 - Jika tidak yakin, kembalikan items: [].`
 
 export async function POST(request: NextRequest) {
@@ -87,10 +88,29 @@ export async function POST(request: NextRequest) {
         .filter((x): x is { name: string; price: number; qty: number } => x !== null)
     : []
 
+  const charges = Array.isArray(p?.charges)
+    ? p.charges
+        .map((c: unknown) => {
+          const obj = c as Record<string, unknown>
+          const name = typeof obj?.name === "string" ? obj.name.trim() : ""
+          const amount = Number(obj?.amount)
+          if (!name || !Number.isFinite(amount) || amount <= 0) return null
+          return { name, amount }
+        })
+        .filter((x): x is { name: string; amount: number } => x !== null)
+    : []
+
+  // Backwards compat: if old keys still come through, fold them in
+  if (Number.isFinite(Number(p?.serviceCharge)) && Number(p?.serviceCharge) > 0) {
+    charges.push({ name: "Service Charge", amount: Number(p.serviceCharge) })
+  }
+  if (Number.isFinite(Number(p?.tax)) && Number(p?.tax) > 0) {
+    charges.push({ name: "PPN", amount: Number(p.tax) })
+  }
+
   return NextResponse.json({
     title: typeof p?.title === "string" ? p.title : "",
     items,
-    serviceCharge: Number.isFinite(Number(p?.serviceCharge)) ? Number(p.serviceCharge) : 0,
-    tax: Number.isFinite(Number(p?.tax)) ? Number(p.tax) : 0,
+    charges,
   })
 }

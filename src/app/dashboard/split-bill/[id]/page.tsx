@@ -1,32 +1,193 @@
 "use client"
 
-import { use, useState, useMemo } from "react"
+import { use, useState, useMemo, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { AmountInput } from "@/components/common/amount-input"
-import { CurrencyDisplay } from "@/components/common/currency-display"
 import { useBill } from "@/lib/hooks/use-bills"
 import { useToast } from "@/lib/hooks/use-toast"
 import { computeBreakdown, billGrandTotal } from "@/lib/bill-utils"
 import { formatCurrency } from "@/lib/utils"
-import type { BillItem, BillParticipant, ParticipantBreakdown } from "@/types"
+import type { BillItem, BillParticipant, BillCharge, ParticipantBreakdown, SplitStatus } from "@/types"
+
+interface Mutations {
+  patchBill: (updates: { title?: string; charges?: BillCharge[] }) => Promise<void>
+  addItem: (data: { name: string; price: number; qty: number }) => Promise<void>
+  updateItem: (itemId: string, updates: { name?: string; price?: number; qty?: number; participantIds?: string[] }) => Promise<void>
+  deleteItem: (itemId: string) => Promise<void>
+  addParticipant: (data: { name: string; contact?: string }) => Promise<void>
+  updateParticipant: (pid: string, updates: { status?: SplitStatus }) => Promise<void>
+  deleteParticipant: (pid: string) => Promise<void>
+}
 
 export default function BillEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { bill, loading, refetch } = useBill(id)
+  const { bill, loading, refetch, setBill } = useBill(id)
   const { toast } = useToast()
-  const router = useRouter()
   const [titleEdit, setTitleEdit] = useState<string | null>(null)
 
   const breakdowns = useMemo(() => (bill ? computeBreakdown(bill) : []), [bill])
+
+  const mutations = useMemo<Mutations>(() => ({
+    async patchBill(updates) {
+      setBill((prev) => prev && { ...prev, ...updates })
+      const res = await fetch(`/api/bills/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) {
+        toast({ title: "Gagal simpan", variant: "destructive" })
+        await refetch()
+      }
+    },
+
+    async addItem(data) {
+      const tempId = `temp-${crypto.randomUUID()}`
+      setBill((prev) => prev && {
+        ...prev,
+        items: [
+          ...prev.items,
+          { id: tempId, billId: id, name: data.name, price: data.price, qty: data.qty, position: prev.items.length, participantIds: [] },
+        ],
+      })
+      const res = await fetch(`/api/bills/${id}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        setBill((prev) => prev && { ...prev, items: prev.items.filter((i) => i.id !== tempId) })
+        toast({ title: "Gagal tambah item", variant: "destructive" })
+        return
+      }
+      const created = await res.json()
+      setBill((prev) => {
+        if (!prev) return prev
+        const tempItem = prev.items.find((i) => i.id === tempId)
+        const preserved = tempItem?.participantIds ?? []
+        return { ...prev, items: prev.items.map((i) => i.id === tempId ? { ...created, participantIds: preserved } : i) }
+      })
+    },
+
+    async updateItem(itemId, updates) {
+      let prevSnapshot: BillItem | null = null
+      setBill((prev) => {
+        if (!prev) return prev
+        const existing = prev.items.find((i) => i.id === itemId)
+        if (existing) prevSnapshot = existing
+        return { ...prev, items: prev.items.map((i) => i.id === itemId ? { ...i, ...updates } : i) }
+      })
+      if (itemId.startsWith("temp-")) return
+      const res = await fetch(`/api/bill-items/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) {
+        if (prevSnapshot) {
+          const snapshot = prevSnapshot
+          setBill((prev) => prev && { ...prev, items: prev.items.map((i) => i.id === itemId ? snapshot : i) })
+        }
+        toast({ title: "Gagal simpan item", variant: "destructive" })
+      }
+    },
+
+    async deleteItem(itemId) {
+      let prevSnapshot: BillItem | null = null
+      setBill((prev) => {
+        if (!prev) return prev
+        const existing = prev.items.find((i) => i.id === itemId)
+        if (existing) prevSnapshot = existing
+        return { ...prev, items: prev.items.filter((i) => i.id !== itemId) }
+      })
+      if (itemId.startsWith("temp-")) return
+      const res = await fetch(`/api/bill-items/${itemId}`, { method: "DELETE" })
+      if (!res.ok) {
+        if (prevSnapshot) {
+          const snapshot = prevSnapshot
+          setBill((prev) => prev && { ...prev, items: [...prev.items, snapshot].sort((a, b) => a.position - b.position) })
+        }
+        toast({ title: "Gagal hapus item", variant: "destructive" })
+      }
+    },
+
+    async addParticipant(data) {
+      const tempId = `temp-${crypto.randomUUID()}`
+      setBill((prev) => prev && {
+        ...prev,
+        participants: [
+          ...prev.participants,
+          { id: tempId, billId: id, name: data.name, contact: data.contact ?? null, status: "unpaid" },
+        ],
+      })
+      const res = await fetch(`/api/bills/${id}/participants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        setBill((prev) => prev && { ...prev, participants: prev.participants.filter((p) => p.id !== tempId) })
+        toast({ title: "Gagal tambah peserta", variant: "destructive" })
+        return
+      }
+      const created = await res.json()
+      setBill((prev) => prev && { ...prev, participants: prev.participants.map((p) => p.id === tempId ? created : p) })
+    },
+
+    async updateParticipant(pid, updates) {
+      let prevSnapshot: BillParticipant | null = null
+      setBill((prev) => {
+        if (!prev) return prev
+        const existing = prev.participants.find((p) => p.id === pid)
+        if (existing) prevSnapshot = existing
+        return { ...prev, participants: prev.participants.map((p) => p.id === pid ? { ...p, ...updates } : p) }
+      })
+      if (pid.startsWith("temp-")) return
+      const res = await fetch(`/api/bill-participants/${pid}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) {
+        if (prevSnapshot) {
+          const snapshot = prevSnapshot
+          setBill((prev) => prev && { ...prev, participants: prev.participants.map((p) => p.id === pid ? snapshot : p) })
+        }
+        toast({ title: "Gagal simpan", variant: "destructive" })
+      }
+    },
+
+    async deleteParticipant(pid) {
+      let prevSnapshot: BillParticipant | null = null
+      setBill((prev) => {
+        if (!prev) return prev
+        const existing = prev.participants.find((p) => p.id === pid)
+        if (existing) prevSnapshot = existing
+        return {
+          ...prev,
+          participants: prev.participants.filter((p) => p.id !== pid),
+          items: prev.items.map((i) => ({ ...i, participantIds: i.participantIds.filter((x) => x !== pid) })),
+        }
+      })
+      if (pid.startsWith("temp-")) return
+      const res = await fetch(`/api/bill-participants/${pid}`, { method: "DELETE" })
+      if (!res.ok) {
+        if (prevSnapshot) {
+          const snapshot = prevSnapshot
+          setBill((prev) => prev && { ...prev, participants: [...prev.participants, snapshot] })
+        }
+        toast({ title: "Gagal hapus peserta", variant: "destructive" })
+        await refetch()
+      }
+    },
+  }), [id, refetch, setBill, toast])
 
   if (loading) return <Skeleton className="h-96 w-full" />
   if (!bill) {
@@ -40,25 +201,12 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
     )
   }
 
-  async function patchBill(updates: Record<string, unknown>) {
-    const res = await fetch(`/api/bills/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    })
-    if (!res.ok) {
-      toast({ title: "Gagal simpan", variant: "destructive" })
-      return
-    }
-    await refetch()
-  }
-
   async function saveTitle() {
-    if (titleEdit === null || !titleEdit.trim()) {
-      setTitleEdit(null)
-      return
+    if (titleEdit === null) return
+    const trimmed = titleEdit.trim()
+    if (trimmed && trimmed !== bill?.title) {
+      await mutations.patchBill({ title: trimmed })
     }
-    await patchBill({ title: titleEdit.trim() })
     setTitleEdit(null)
   }
 
@@ -91,47 +239,31 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <ItemsSection
-        items={bill.items}
-        participants={bill.participants}
-        billId={id}
-        onChange={refetch}
-      />
-
-      <ChargesSection
-        serviceCharge={bill.serviceCharge}
-        tax={bill.tax}
-        onSave={(sc, tx) => patchBill({ serviceCharge: sc, tax: tx })}
-      />
-
-      <ParticipantsSection
-        participants={bill.participants}
-        billId={id}
-        onChange={refetch}
-      />
+      <ItemsSection items={bill.items} participants={bill.participants} mutations={mutations} />
+      <ChargesSection charges={bill.charges} mutations={mutations} />
+      <ParticipantsSection participants={bill.participants} mutations={mutations} />
 
       {breakdowns.length > 0 && (
-        <BreakdownSection breakdowns={breakdowns} billTitle={bill.title} onChange={refetch} />
+        <BreakdownSection breakdowns={breakdowns} billTitle={bill.title} mutations={mutations} />
       )}
     </div>
   )
 }
 
-function ItemsSection({ items, participants, billId, onChange }: { items: BillItem[]; participants: BillParticipant[]; billId: string; onChange: () => Promise<void> | void }) {
+function ItemsSection({ items, participants, mutations }: { items: BillItem[]; participants: BillParticipant[]; mutations: Mutations }) {
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState("")
   const [price, setPrice] = useState("")
   const [qty, setQty] = useState("1")
 
-  async function addItem() {
-    if (!name.trim() || !price) return
-    await fetch(`/api/bills/${billId}/items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), price: Number(price), qty: Number(qty) || 1 }),
-    })
+  function reset() {
     setName(""); setPrice(""); setQty("1"); setAddOpen(false)
-    await onChange()
+  }
+
+  async function submit() {
+    if (!name.trim() || !price) return
+    await mutations.addItem({ name: name.trim(), price: Number(price), qty: Number(qty) || 1 })
+    reset()
   }
 
   return (
@@ -151,8 +283,8 @@ function ItemsSection({ items, participants, billId, onChange }: { items: BillIt
               <Input type="number" min={1} placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={addItem} className="flex-1">Simpan</Button>
-              <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setName(""); setPrice(""); setQty("1") }}>Batal</Button>
+              <Button size="sm" onClick={submit} className="flex-1">Simpan</Button>
+              <Button size="sm" variant="ghost" onClick={reset}>Batal</Button>
             </div>
           </div>
         )}
@@ -162,47 +294,40 @@ function ItemsSection({ items, participants, billId, onChange }: { items: BillIt
         )}
 
         {items.map((item) => (
-          <ItemRow key={item.id} item={item} participants={participants} onChange={onChange} />
+          <ItemRow key={item.id} item={item} participants={participants} mutations={mutations} />
         ))}
       </CardContent>
     </Card>
   )
 }
 
-function ItemRow({ item, participants, onChange }: { item: BillItem; participants: BillParticipant[]; onChange: () => Promise<void> | void }) {
+function ItemRow({ item, participants, mutations }: { item: BillItem; participants: BillParticipant[]; mutations: Mutations }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(item.name)
   const [price, setPrice] = useState(String(item.price))
   const [qty, setQty] = useState(String(item.qty))
   const [popoverOpen, setPopoverOpen] = useState(false)
 
+  useEffect(() => {
+    if (!editing) {
+      setName(item.name)
+      setPrice(String(item.price))
+      setQty(String(item.qty))
+    }
+  }, [item.name, item.price, item.qty, editing])
+
   const assigned = participants.filter((p) => item.participantIds.includes(p.id))
 
   async function save() {
-    await fetch(`/api/bill-items/${item.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), price: Number(price), qty: Number(qty) || 1 }),
-    })
+    await mutations.updateItem(item.id, { name: name.trim(), price: Number(price), qty: Number(qty) || 1 })
     setEditing(false)
-    await onChange()
   }
 
-  async function deleteItem() {
-    await fetch(`/api/bill-items/${item.id}`, { method: "DELETE" })
-    await onChange()
-  }
-
-  async function toggleParticipant(participantId: string) {
+  function toggleParticipant(participantId: string) {
     const next = item.participantIds.includes(participantId)
       ? item.participantIds.filter((p) => p !== participantId)
       : [...item.participantIds, participantId]
-    await fetch(`/api/bill-items/${item.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ participantIds: next }),
-    })
-    await onChange()
+    mutations.updateItem(item.id, { participantIds: next })
   }
 
   if (editing) {
@@ -272,7 +397,7 @@ function ItemRow({ item, participants, onChange }: { item: BillItem; participant
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(true)} aria-label="Edit">
           <Pencil className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={deleteItem} aria-label="Hapus">
+        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => mutations.deleteItem(item.id)} aria-label="Hapus">
           <Trash2 className="h-3 w-3" />
         </Button>
       </div>
@@ -280,63 +405,110 @@ function ItemRow({ item, participants, onChange }: { item: BillItem; participant
   )
 }
 
-function ChargesSection({ serviceCharge, tax, onSave }: { serviceCharge: number; tax: number; onSave: (sc: number, tx: number) => Promise<void> | void }) {
-  const [sc, setSc] = useState(String(serviceCharge))
-  const [tx, setTx] = useState(String(tax))
-  const [saving, setSaving] = useState(false)
-  const dirty = Number(sc) !== serviceCharge || Number(tx) !== tax
+function ChargesSection({ charges, mutations }: { charges: BillCharge[]; mutations: Mutations }) {
+  const commit = useCallback((next: BillCharge[]) => {
+    mutations.patchBill({ charges: next })
+  }, [mutations])
 
-  async function save() {
-    setSaving(true)
-    await onSave(Number(sc) || 0, Number(tx) || 0)
-    setSaving(false)
+  function addRow(name: string) {
+    if (charges.some((c) => c.name.toLowerCase() === name.toLowerCase())) return
+    commit([...charges, { name, amount: 0 }])
   }
+
+  function removeRow(idx: number) {
+    commit(charges.filter((_, i) => i !== idx))
+  }
+
+  function updateRow(idx: number, patch: Partial<BillCharge>) {
+    commit(charges.map((c, i) => i === idx ? { ...c, ...patch } : c))
+  }
+
+  const hasService = charges.some((c) => c.name.toLowerCase().includes("service"))
+  const hasPpn = charges.some((c) => c.name.toLowerCase().includes("ppn") || c.name.toLowerCase().includes("pajak"))
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Service Charge & PPN</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2"><Coins className="h-4 w-4" /> Biaya Tambahan</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs">Service Charge</Label>
-            <AmountInput value={sc} onChange={setSc} placeholder="0" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">PPN / Pajak</Label>
-            <AmountInput value={tx} onChange={setTx} placeholder="0" />
-          </div>
-        </div>
-        {dirty && (
-          <Button size="sm" onClick={save} disabled={saving} className="w-full">
-            {saving ? "Menyimpan..." : "Simpan"}
-          </Button>
+        {charges.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-2">Belum ada biaya tambahan. Akan dibagi proporsional ke tiap orang.</p>
         )}
+
+        {charges.map((charge, idx) => (
+          <ChargeRow key={idx} charge={charge} onChange={(p) => updateRow(idx, p)} onDelete={() => removeRow(idx)} />
+        ))}
+
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {!hasService && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => addRow("Service Charge")}>
+              <Plus className="h-3 w-3 mr-1" /> Service Charge
+            </Button>
+          )}
+          {!hasPpn && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => addRow("PPN")}>
+              <Plus className="h-3 w-3 mr-1" /> PPN
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => addRow("Biaya")}>
+            <Plus className="h-3 w-3 mr-1" /> Biaya Lain
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
 }
 
-function ParticipantsSection({ participants, billId, onChange }: { participants: BillParticipant[]; billId: string; onChange: () => Promise<void> | void }) {
+function ChargeRow({ charge, onChange, onDelete }: { charge: BillCharge; onChange: (p: Partial<BillCharge>) => void; onDelete: () => void }) {
+  const [name, setName] = useState(charge.name)
+  const [amount, setAmount] = useState(String(charge.amount))
+
+  useEffect(() => { setName(charge.name) }, [charge.name])
+  useEffect(() => { setAmount(String(charge.amount)) }, [charge.amount])
+
+  function commitName() {
+    const trimmed = name.trim()
+    if (trimmed && trimmed !== charge.name) onChange({ name: trimmed })
+    else if (!trimmed) setName(charge.name)
+  }
+  function commitAmount() {
+    const num = Number(amount) || 0
+    if (num !== charge.amount) onChange({ amount: num })
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={commitName}
+        placeholder="Nama biaya"
+        className="flex-1"
+      />
+      <div className="w-32 flex-shrink-0">
+        <AmountInput value={amount} onChange={setAmount} onBlur={commitAmount} placeholder="0" />
+      </div>
+      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive flex-shrink-0" onClick={onDelete} aria-label="Hapus biaya">
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  )
+}
+
+function ParticipantsSection({ participants, mutations }: { participants: BillParticipant[]; mutations: Mutations }) {
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState("")
   const [contact, setContact] = useState("")
 
-  async function addParticipant() {
-    if (!name.trim()) return
-    await fetch(`/api/bills/${billId}/participants`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), contact: contact.trim() || undefined }),
-    })
+  function reset() {
     setName(""); setContact(""); setAddOpen(false)
-    await onChange()
   }
 
-  async function deleteParticipant(id: string) {
-    await fetch(`/api/bill-participants/${id}`, { method: "DELETE" })
-    await onChange()
+  async function submit() {
+    if (!name.trim()) return
+    await mutations.addParticipant({ name: name.trim(), contact: contact.trim() || undefined })
+    reset()
   }
 
   return (
@@ -350,11 +522,11 @@ function ParticipantsSection({ participants, billId, onChange }: { participants:
       <CardContent className="space-y-2">
         {addOpen && (
           <div className="space-y-2 rounded-md border p-3 bg-muted/40">
-            <Input placeholder="Nama" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <Input placeholder="Nama" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submit() }} autoFocus />
             <Input placeholder="No. WhatsApp (opsional, contoh: 081234567890)" value={contact} onChange={(e) => setContact(e.target.value)} />
             <div className="flex gap-2">
-              <Button size="sm" onClick={addParticipant} className="flex-1">Simpan</Button>
-              <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setName(""); setContact("") }}>Batal</Button>
+              <Button size="sm" onClick={submit} className="flex-1">Simpan</Button>
+              <Button size="sm" variant="ghost" onClick={reset}>Batal</Button>
             </div>
           </div>
         )}
@@ -373,7 +545,7 @@ function ParticipantsSection({ participants, billId, onChange }: { participants:
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground hover:text-destructive"
-              onClick={() => deleteParticipant(p.id)}
+              onClick={() => mutations.deleteParticipant(p.id)}
               aria-label="Hapus peserta"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -385,7 +557,7 @@ function ParticipantsSection({ participants, billId, onChange }: { participants:
   )
 }
 
-function BreakdownSection({ breakdowns, billTitle, onChange }: { breakdowns: ParticipantBreakdown[]; billTitle: string; onChange: () => Promise<void> | void }) {
+function BreakdownSection({ breakdowns, billTitle, mutations }: { breakdowns: ParticipantBreakdown[]; billTitle: string; mutations: Mutations }) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -393,21 +565,16 @@ function BreakdownSection({ breakdowns, billTitle, onChange }: { breakdowns: Par
       </CardHeader>
       <CardContent className="space-y-3">
         {breakdowns.map((b) => (
-          <BreakdownCard key={b.participantId} breakdown={b} billTitle={billTitle} onChange={onChange} />
+          <BreakdownCard key={b.participantId} breakdown={b} billTitle={billTitle} mutations={mutations} />
         ))}
       </CardContent>
     </Card>
   )
 }
 
-function BreakdownCard({ breakdown, billTitle, onChange }: { breakdown: ParticipantBreakdown; billTitle: string; onChange: () => Promise<void> | void }) {
-  async function togglePaid() {
-    await fetch(`/api/bill-participants/${breakdown.participantId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: breakdown.status === "paid" ? "unpaid" : "paid" }),
-    })
-    await onChange()
+function BreakdownCard({ breakdown, billTitle, mutations }: { breakdown: ParticipantBreakdown; billTitle: string; mutations: Mutations }) {
+  function togglePaid() {
+    mutations.updateParticipant(breakdown.participantId, { status: breakdown.status === "paid" ? "unpaid" : "paid" })
   }
 
   function sendWhatsApp() {
@@ -417,8 +584,9 @@ function BreakdownCard({ breakdown, billTitle, onChange }: { breakdown: Particip
     }
     lines.push(``)
     lines.push(`Subtotal item: ${formatCurrency(breakdown.itemsSubtotal)}`)
-    if (breakdown.serviceShare > 0) lines.push(`Service charge: ${formatCurrency(breakdown.serviceShare)}`)
-    if (breakdown.taxShare > 0) lines.push(`PPN: ${formatCurrency(breakdown.taxShare)}`)
+    for (const c of breakdown.chargeShares) {
+      if (c.amount > 0) lines.push(`${c.name}: ${formatCurrency(c.amount)}`)
+    }
     lines.push(`*Total: ${formatCurrency(breakdown.total)}*`)
     const phone = breakdown.contact ? breakdown.contact.replace(/\D/g, "") : ""
     const text = encodeURIComponent(lines.join("\n"))
@@ -448,18 +616,14 @@ function BreakdownCard({ breakdown, billTitle, onChange }: { breakdown: Particip
               <span>{formatCurrency(li.share)}</span>
             </div>
           ))}
-          {breakdown.serviceShare > 0 && (
-            <div className="flex justify-between">
-              <span>Service charge</span>
-              <span>{formatCurrency(breakdown.serviceShare)}</span>
-            </div>
-          )}
-          {breakdown.taxShare > 0 && (
-            <div className="flex justify-between">
-              <span>PPN</span>
-              <span>{formatCurrency(breakdown.taxShare)}</span>
-            </div>
-          )}
+          {breakdown.chargeShares.map((c, idx) => (
+            c.amount > 0 ? (
+              <div key={`c-${idx}`} className="flex justify-between">
+                <span>{c.name}</span>
+                <span>{formatCurrency(c.amount)}</span>
+              </div>
+            ) : null
+          ))}
         </div>
       )}
 

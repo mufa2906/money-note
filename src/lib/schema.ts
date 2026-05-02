@@ -93,6 +93,7 @@ export const bill = sqliteTable("bill", {
   photoUrl: text("photo_url"),
   serviceCharge: real("service_charge").notNull().default(0),
   tax: real("tax").notNull().default(0),
+  charges: text("charges"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 })

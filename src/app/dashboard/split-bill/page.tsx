@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/common/empty-state"
-import { CurrencyDisplay } from "@/components/common/currency-display"
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { CreateBillModal } from "@/components/split-bill/create-bill-modal"
 import { useBills } from "@/lib/hooks/use-bills"
@@ -81,7 +80,6 @@ function BillCard({ bill, onDeleted }: { bill: Bill; onDeleted: () => void }) {
               <p className="text-sm font-medium truncate">{bill.title}</p>
               <p className="text-xs text-muted-foreground">{formatDate(bill.createdAt)}</p>
             </div>
-            <CurrencyDisplay amount={bill.serviceCharge + bill.tax} className="text-xs text-muted-foreground" />
             <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </Link>
           <Button

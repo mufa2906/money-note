@@ -80,13 +80,17 @@ export interface BillParticipant {
   status: SplitStatus
 }
 
+export interface BillCharge {
+  name: string
+  amount: number
+}
+
 export interface Bill {
   id: string
   userId: string
   title: string
   photoUrl: string | null
-  serviceCharge: number
-  tax: number
+  charges: BillCharge[]
   createdAt: string
   updatedAt: string
 }
@@ -102,8 +106,7 @@ export interface ParticipantBreakdown {
   contact: string | null
   status: SplitStatus
   itemsSubtotal: number
-  serviceShare: number
-  taxShare: number
+  chargeShares: { name: string; amount: number }[]
   total: number
   lineItems: { name: string; qty: number; share: number }[]
 }

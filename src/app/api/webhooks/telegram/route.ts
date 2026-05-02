@@ -373,8 +373,26 @@ async function handleBills(userId: string): Promise<string> {
       assignmentsByItem.set(a.itemId, arr)
     }
 
+    let charges: { name: string; amount: number }[] = []
+    if (b.charges) {
+      try {
+        const parsed = JSON.parse(b.charges)
+        if (Array.isArray(parsed)) {
+          charges = parsed.filter((c: { name?: unknown; amount?: unknown }) => typeof c?.name === "string" && Number.isFinite(c?.amount)) as { name: string; amount: number }[]
+        }
+      } catch { /* ignore */ }
+    }
+    if (charges.length === 0) {
+      if (b.serviceCharge > 0) charges.push({ name: "Service Charge", amount: b.serviceCharge })
+      if (b.tax > 0) charges.push({ name: "PPN", amount: b.tax })
+    }
+
     const breakdown = computeBreakdown({
-      ...b,
+      id: b.id,
+      userId: b.userId,
+      title: b.title,
+      photoUrl: b.photoUrl,
+      charges,
       createdAt: String(b.createdAt),
       updatedAt: String(b.updatedAt),
       items: items.map((i) => ({ ...i, participantIds: assignmentsByItem.get(i.id) ?? [] })),
