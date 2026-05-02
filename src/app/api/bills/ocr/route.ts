@@ -8,19 +8,24 @@ const PROMPT = `Kamu adalah asisten yang membaca foto struk pembelian (Indonesia
 {
   "title": "nama tempat / restoran / toko",
   "items": [
-    { "name": "nama menu", "price": <harga satuan dalam Rupiah, integer>, "qty": <jumlah, integer minimal 1> }
+    { "name": "nama menu", "price": <harga satuan SETELAH diskon, integer>, "qty": <jumlah, integer minimal 1> }
   ],
   "charges": [
     { "name": "nama biaya tambahan", "amount": <nominal dalam Rupiah, integer> }
   ]
 }
 
-Aturan:
-- price = harga satuan, BUKAN total. Jika struk hanya menunjukkan total per baris (qty × harga), bagi total dengan qty.
+Aturan untuk "items":
+- price = harga satuan SETELAH diskon (nett). Jika ada diskon/promo pada item tersebut (tertulis di baris bawahnya atau di kolom diskon), kurangkan dari harga asli sebelum dibagi qty.
+- Jika struk menunjukkan total per baris (qty × harga), bagi total dengan qty untuk mendapat harga satuan.
 - Jika tidak ada qty, asumsikan qty = 1.
-- Hanya item makanan/produk di "items"; abaikan diskon, voucher, subtotal, total, kembalian, tunai.
-- "charges" berisi semua biaya tambahan di luar harga item: service charge, PPN, PB1, biaya kemasan, biaya admin, dll. Pakai nama persis seperti tertulis di struk (misal "Service Charge", "PPN 11%", "PB1", "Kemasan").
-- Kalau tidak ada biaya tambahan, "charges": [].
+- Masukkan semua item makanan/minuman/produk ke "items". JANGAN masukkan subtotal, total, kembalian, tunai, atau biaya tambahan.
+
+Aturan untuk "charges":
+- "charges" berisi biaya yang BENAR-BENAR DITAMBAHKAN ke total tagihan: service charge, PPN (yang dipungut/dikenakan), PB1, biaya kemasan, biaya admin, donasi, dll.
+- JANGAN masukkan baris PPN yang bersifat INFORMATIF saja dan TIDAK menambah total: "PPN DIBEBASKAN", "PPN BEBAS", "PPN TIDAK DIPUNGUT", "PPN 0%", atau baris PPN dengan keterangan "dibebaskan/bebas/tidak dipungut". Baris ini hanya pemberitahuan, bukan biaya.
+- Pakai nama persis seperti tertulis di struk (misal "Service Charge", "PPN 11%", "PB1", "Kemasan").
+- Kalau tidak ada biaya tambahan yang nyata, "charges": [].
 - Semua nominal dalam Rupiah utuh (tanpa desimal).
 - Jika tidak yakin, kembalikan items: [].`
 
