@@ -27,6 +27,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (typeof body?.name === "string" && body.name.trim()) updates.name = body.name.trim()
   if (body?.price !== undefined) updates.price = Number(body.price) || 0
   if (body?.qty !== undefined) updates.qty = Math.max(1, Math.floor(Number(body.qty) || 1))
+  if ("originalPrice" in body) {
+    const op = Number(body.originalPrice)
+    updates.originalPrice = Number.isFinite(op) && op > 0 ? op : null
+  }
 
   if (Object.keys(updates).length) {
     await db.update(billItem).set(updates).where(eq(billItem.id, id))
