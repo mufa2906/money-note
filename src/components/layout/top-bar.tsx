@@ -1,7 +1,8 @@
 "use client"
 
-import { Bell } from "lucide-react"
+import { Bell, Menu } from "lucide-react"
 import Link from "next/link"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "./theme-toggle"
 import { useAuth } from "@/providers/auth-provider"
@@ -9,19 +10,28 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { getInitials } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { useNotifications } from "@/lib/hooks/use-notifications"
+import { MobileMenu } from "./mobile-menu"
 
 export function TopBar() {
   const { user } = useAuth()
   const { unreadCount } = useNotifications()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   return (
+    <>
+    <MobileMenu open={menuOpen} onOpenChange={setMenuOpen} />
     <header className="flex items-center justify-between h-14 px-4 border-b bg-background lg:hidden">
-      <Link href="/dashboard" className="flex items-center gap-2 -mx-1 px-1 py-1 rounded-md hover:bg-accent transition-colors">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
-          M
-        </div>
-        <span className="font-semibold">MoneyNote</span>
-      </Link>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" onClick={() => setMenuOpen(true)}>
+          <Menu className="h-5 w-5" />
+        </Button>
+        <Link href="/dashboard" className="flex items-center gap-2 px-1 py-1 rounded-md hover:bg-accent transition-colors">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
+            M
+          </div>
+          <span className="font-semibold">MoneyNote</span>
+        </Link>
+      </div>
       <div className="flex items-center gap-1">
         <ThemeToggle />
         <Button variant="ghost" size="icon" asChild className="relative">
@@ -43,5 +53,6 @@ export function TopBar() {
         </Link>
       </div>
     </header>
+    </>
   )
 }

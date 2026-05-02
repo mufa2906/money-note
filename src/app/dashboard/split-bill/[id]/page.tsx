@@ -573,21 +573,33 @@ function BreakdownSection({ breakdowns, billTitle, mutations }: { breakdowns: Pa
 }
 
 function BreakdownCard({ breakdown, billTitle, mutations }: { breakdown: ParticipantBreakdown; billTitle: string; mutations: Mutations }) {
+  const chargesTotal = breakdown.chargeShares.reduce((s, c) => s + c.amount, 0)
+  const hasItems = breakdown.lineItems.length > 0
+  const hasCharges = chargesTotal > 0
+
   function togglePaid() {
     mutations.updateParticipant(breakdown.participantId, { status: breakdown.status === "paid" ? "unpaid" : "paid" })
   }
 
   function sendWhatsApp() {
-    const lines: string[] = [`Halo ${breakdown.name}, ini rincian patungan untuk *${billTitle}*:`, ""]
-    for (const li of breakdown.lineItems) {
-      lines.push(`• ${li.name}${li.qty > 1 ? ` ×${li.qty}` : ""}: ${formatCurrency(li.share)}`)
+    const lines: string[] = [`Halo ${breakdown.name}, rincian patunganmu untuk *${billTitle}*:`, ""]
+    if (hasItems) {
+      lines.push("Item:")
+      for (const li of breakdown.lineItems) {
+        lines.push(`• ${li.name}${li.qty > 1 ? ` ×${li.qty}` : ""}: ${formatCurrency(li.share)}`)
+      }
+      lines.push(`Subtotal item: ${formatCurrency(breakdown.itemsSubtotal)}`)
+      lines.push("")
     }
-    lines.push(``)
-    lines.push(`Subtotal item: ${formatCurrency(breakdown.itemsSubtotal)}`)
-    for (const c of breakdown.chargeShares) {
-      if (c.amount > 0) lines.push(`${c.name}: ${formatCurrency(c.amount)}`)
+    if (hasCharges) {
+      lines.push("Biaya tambahan:")
+      for (const c of breakdown.chargeShares) {
+        if (c.amount > 0) lines.push(`• ${c.name}: ${formatCurrency(c.amount)}`)
+      }
+      lines.push(`Subtotal biaya: ${formatCurrency(chargesTotal)}`)
+      lines.push("")
     }
-    lines.push(`*Total: ${formatCurrency(breakdown.total)}*`)
+    lines.push(`*TOTAL: ${formatCurrency(breakdown.total)}*`)
     const phone = breakdown.contact ? breakdown.contact.replace(/\D/g, "") : ""
     const text = encodeURIComponent(lines.join("\n"))
     window.open(`https://wa.me/${phone}?text=${text}`, "_blank")
@@ -608,22 +620,46 @@ function BreakdownCard({ breakdown, billTitle, mutations }: { breakdown: Partici
         <p className="text-base font-bold">{formatCurrency(breakdown.total)}</p>
       </div>
 
-      {breakdown.lineItems.length > 0 && (
-        <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-          {breakdown.lineItems.map((li, idx) => (
-            <div key={idx} className="flex justify-between">
-              <span className="truncate">{li.name}{li.qty > 1 ? ` ×${li.qty}` : ""}</span>
-              <span>{formatCurrency(li.share)}</span>
-            </div>
-          ))}
-          {breakdown.chargeShares.map((c, idx) => (
-            c.amount > 0 ? (
-              <div key={`c-${idx}`} className="flex justify-between">
-                <span>{c.name}</span>
-                <span>{formatCurrency(c.amount)}</span>
+      {(hasItems || hasCharges) && (
+        <div className="mt-3 space-y-2 text-xs">
+          {hasItems && (
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Item</p>
+              {breakdown.lineItems.map((li, idx) => (
+                <div key={idx} className="flex justify-between text-muted-foreground">
+                  <span className="truncate pr-2">• {li.name}{li.qty > 1 ? ` ×${li.qty}` : ""}</span>
+                  <span className="tabular-nums">{formatCurrency(li.share)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between pt-0.5 border-t border-dashed">
+                <span className="font-medium">Subtotal item</span>
+                <span className="font-medium tabular-nums">{formatCurrency(breakdown.itemsSubtotal)}</span>
               </div>
-            ) : null
-          ))}
+            </div>
+          )}
+
+          {hasCharges && (
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Biaya Tambahan</p>
+              {breakdown.chargeShares.map((c, idx) => (
+                c.amount > 0 ? (
+                  <div key={`c-${idx}`} className="flex justify-between text-muted-foreground">
+                    <span className="truncate pr-2">• {c.name}</span>
+                    <span className="tabular-nums">{formatCurrency(c.amount)}</span>
+                  </div>
+                ) : null
+              ))}
+              <div className="flex justify-between pt-0.5 border-t border-dashed">
+                <span className="font-medium">Subtotal biaya</span>
+                <span className="font-medium tabular-nums">{formatCurrency(chargesTotal)}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between pt-1.5 border-t-2">
+            <span className="font-bold text-sm">TOTAL</span>
+            <span className="font-bold text-sm tabular-nums">{formatCurrency(breakdown.total)}</span>
+          </div>
         </div>
       )}
 
