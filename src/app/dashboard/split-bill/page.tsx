@@ -1,26 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { CheckCircle2, Plus } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { Plus, Receipt, ChevronRight, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/common/empty-state"
 import { CurrencyDisplay } from "@/components/common/currency-display"
-import { CreateSplitBillModal } from "@/components/split-bill/create-split-bill-modal"
-import { useSplitBills } from "@/lib/hooks/use-split-bills"
-import { formatDate, getInitials } from "@/lib/utils"
+import { ConfirmDialog } from "@/components/common/confirm-dialog"
+import { CreateBillModal } from "@/components/split-bill/create-bill-modal"
+import { useBills } from "@/lib/hooks/use-bills"
+import { formatDate } from "@/lib/utils"
 import { useToast } from "@/lib/hooks/use-toast"
-import type { SplitBill } from "@/types"
+import type { Bill } from "@/types"
 
 export default function SplitBillPage() {
-  const { splitBills, loading, refetch, markPaid } = useSplitBills()
+  const { bills, loading, refetch } = useBills()
   const [createOpen, setCreateOpen] = useState(false)
-  const unpaid = splitBills.filter((s) => s.status === "unpaid")
-  const paid = splitBills.filter((s) => s.status === "paid")
 
   return (
     <>
@@ -28,107 +26,84 @@ export default function SplitBillPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Bagi Tagihan</h1>
-            <p className="text-sm text-muted-foreground">{unpaid.length} tagihan belum lunas</p>
+            <p className="text-sm text-muted-foreground">{bills.length} tagihan</p>
           </div>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Bagi Tagihan
+            <Plus className="h-4 w-4 mr-1" /> Tagihan Baru
           </Button>
         </div>
 
         {loading ? (
           <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
           </div>
+        ) : bills.length === 0 ? (
+          <EmptyState
+            icon={Receipt}
+            title="Belum ada tagihan"
+            description="Bikin tagihan baru, foto struk atau input manual, lalu bagi ke teman-teman."
+          />
         ) : (
-          <Tabs defaultValue="unpaid">
-            <TabsList>
-              <TabsTrigger value="unpaid">Belum Lunas ({unpaid.length})</TabsTrigger>
-              <TabsTrigger value="paid">Sudah Lunas ({paid.length})</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="unpaid" className="space-y-3 mt-4">
-              {unpaid.length === 0 ? (
-                <EmptyState icon={CheckCircle2} title="Semua tagihan sudah lunas!" description="Tidak ada tagihan yang belum dibayar." />
-              ) : (
-                unpaid.map((split) => <SplitCard key={split.id} split={split} onMarkPaid={markPaid} onDeleted={refetch} />)
-              )}
-            </TabsContent>
-
-            <TabsContent value="paid" className="space-y-3 mt-4">
-              {paid.length === 0 ? (
-                <EmptyState icon={CheckCircle2} title="Belum ada tagihan lunas" description="Tagihan yang sudah lunas akan muncul di sini." />
-              ) : (
-                paid.map((split) => <SplitCard key={split.id} split={split} onMarkPaid={markPaid} onDeleted={refetch} />)
-              )}
-            </TabsContent>
-          </Tabs>
+          <div className="space-y-2">
+            {bills.map((b) => <BillCard key={b.id} bill={b} onDeleted={refetch} />)}
+          </div>
         )}
       </div>
-      <CreateSplitBillModal open={createOpen} onOpenChange={setCreateOpen} onSuccess={refetch} />
+      <CreateBillModal open={createOpen} onOpenChange={setCreateOpen} />
     </>
   )
 }
 
-function SplitCard({ split, onMarkPaid, onDeleted }: { split: SplitBill; onMarkPaid: (id: string) => Promise<void>; onDeleted: () => void }) {
+function BillCard({ bill, onDeleted }: { bill: Bill; onDeleted: () => void }) {
   const { toast } = useToast()
+  const router = useRouter()
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   async function handleDelete() {
-    try {
-      const res = await fetch(`/api/split-bills?id=${split.id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Gagal menghapus")
-      toast({ title: "Tagihan dihapus" })
-      onDeleted()
-    } catch (e) {
-      toast({ title: "Gagal", description: String(e), variant: "destructive" })
+    const res = await fetch(`/api/bills/${bill.id}`, { method: "DELETE" })
+    if (!res.ok) {
+      toast({ title: "Gagal hapus", variant: "destructive" })
+      return
     }
-  }
-
-  function handleReminder() {
-    const amount = split.splitAmount.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })
-    const text = `Halo ${split.targetName}, mengingatkan tagihan sebesar ${amount} untuk "${split.transactionDescription}". Mohon segera dilunasi. Terima kasih!`
-    const phone = split.targetContact ? split.targetContact.replace(/\D/g, "") : ""
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank")
+    toast({ title: "Tagihan dihapus" })
+    onDeleted()
   }
 
   return (
     <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <Avatar className="h-10 w-10 flex-shrink-0">
-            <AvatarFallback className="text-xs bg-primary/10 text-primary">
-              {getInitials(split.targetName)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <p className="font-medium text-sm">{split.targetName}</p>
-              <Badge variant={split.status === "paid" ? "default" : "secondary"} className="text-xs py-0 px-1.5 h-4">
-                {split.status === "paid" ? "Lunas" : "Belum Dibayar"}
-              </Badge>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-3">
+          <Link href={`/dashboard/split-bill/${bill.id}`} className="flex-1 min-w-0 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary flex-shrink-0">
+              <Receipt className="h-4 w-4" />
             </div>
-            <p className="text-xs text-muted-foreground truncate">{split.transactionDescription}</p>
-            <p className="text-xs text-muted-foreground">{split.targetContact || "Tidak ada kontak"} · {formatDate(split.createdAt)}</p>
-          </div>
-          <CurrencyDisplay amount={split.splitAmount} className="text-sm flex-shrink-0" />
-        </div>
-        <div className="mt-3 flex gap-2">
-          {split.status === "unpaid" && (
-            <>
-              <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={handleReminder}>
-                Kirim Pengingat
-              </Button>
-              <Button size="sm" className="h-7 text-xs flex-1" onClick={() => onMarkPaid(split.id)}>
-                Tandai Lunas
-              </Button>
-            </>
-          )}
-          {split.status === "paid" && (
-            <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleDelete}>
-              Hapus
-            </Button>
-          )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{bill.title}</p>
+              <p className="text-xs text-muted-foreground">{formatDate(bill.createdAt)}</p>
+            </div>
+            <CurrencyDisplay amount={bill.serviceCharge + bill.tax} className="text-xs text-muted-foreground" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+            onClick={() => setConfirmOpen(true)}
+            aria-label="Hapus tagihan"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </CardContent>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Hapus tagihan?"
+        description={`"${bill.title}" akan dihapus beserta semua item dan peserta. Tidak bisa dibatalkan.`}
+        confirmText="Hapus"
+        destructive
+        onConfirm={handleDelete}
+      />
     </Card>
   )
 }

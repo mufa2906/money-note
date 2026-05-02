@@ -62,6 +62,52 @@ export interface SplitBill {
   createdAt: string
 }
 
+export interface BillItem {
+  id: string
+  billId: string
+  name: string
+  price: number
+  qty: number
+  position: number
+  participantIds: string[]
+}
+
+export interface BillParticipant {
+  id: string
+  billId: string
+  name: string
+  contact: string | null
+  status: SplitStatus
+}
+
+export interface Bill {
+  id: string
+  userId: string
+  title: string
+  photoUrl: string | null
+  serviceCharge: number
+  tax: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BillDetail extends Bill {
+  items: BillItem[]
+  participants: BillParticipant[]
+}
+
+export interface ParticipantBreakdown {
+  participantId: string
+  name: string
+  contact: string | null
+  status: SplitStatus
+  itemsSubtotal: number
+  serviceShare: number
+  taxShare: number
+  total: number
+  lineItems: { name: string; qty: number; share: number }[]
+}
+
 export type NotificationKind =
   | "transaction_added"
   | "budget_warning"

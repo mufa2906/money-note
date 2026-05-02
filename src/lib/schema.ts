@@ -86,6 +86,39 @@ export const splitBill = sqliteTable("split_bill", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 })
 
+export const bill = sqliteTable("bill", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  photoUrl: text("photo_url"),
+  serviceCharge: real("service_charge").notNull().default(0),
+  tax: real("tax").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+})
+
+export const billItem = sqliteTable("bill_item", {
+  id: text("id").primaryKey(),
+  billId: text("bill_id").notNull().references(() => bill.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  price: real("price").notNull(),
+  qty: integer("qty").notNull().default(1),
+  position: integer("position").notNull().default(0),
+})
+
+export const billParticipant = sqliteTable("bill_participant", {
+  id: text("id").primaryKey(),
+  billId: text("bill_id").notNull().references(() => bill.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  contact: text("contact"),
+  status: text("status", { enum: ["unpaid", "paid"] }).notNull().default("unpaid"),
+})
+
+export const billItemAssignment = sqliteTable("bill_item_assignment", {
+  itemId: text("item_id").notNull().references(() => billItem.id, { onDelete: "cascade" }),
+  participantId: text("participant_id").notNull().references(() => billParticipant.id, { onDelete: "cascade" }),
+})
+
 export const pushSubscription = sqliteTable("push_subscription", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),

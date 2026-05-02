@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { and, desc, eq, gte, sql } from "drizzle-orm"
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { user, walletAccount, transaction, splitBill, notification } from "@/lib/schema"
+import { user, walletAccount, transaction, bill, billItem, billParticipant, billItemAssignment, notification } from "@/lib/schema"
+import { computeBreakdown } from "@/lib/bill-utils"
 import { generateId } from "@/lib/api-auth"
 import {
   sendTelegramMessage,
@@ -346,22 +347,53 @@ async function handleSummary(userId: string): Promise<string> {
 }
 
 async function handleBills(userId: string): Promise<string> {
-  const rows = await db
-    .select({
-      id: splitBill.id,
-      targetName: splitBill.targetName,
-      splitAmount: splitBill.splitAmount,
-      createdAt: splitBill.createdAt,
-    })
-    .from(splitBill)
-    .innerJoin(transaction, eq(splitBill.transactionId, transaction.id))
-    .where(and(eq(transaction.userId, userId), eq(splitBill.status, "unpaid")))
-    .orderBy(desc(splitBill.createdAt))
+  const bills = await db
+    .select()
+    .from(bill)
+    .where(eq(bill.userId, userId))
+    .orderBy(desc(bill.createdAt))
     .limit(10)
 
-  if (rows.length === 0) return "Tidak ada tagihan belum lunas. 🎉"
-  const lines = rows.map((r) => `• ${escapeHtml(r.targetName)} — <b>${formatCurrency(r.splitAmount)}</b>`)
-  return [`<b>Tagihan Belum Lunas (${rows.length})</b>`, "", ...lines].join("\n")
+  if (bills.length === 0) return "Belum ada tagihan. Bikin lewat aplikasi dulu ya."
+
+  const lines: string[] = []
+  let unpaidCount = 0
+
+  for (const b of bills) {
+    const items = await db.select().from(billItem).where(eq(billItem.billId, b.id)).orderBy(billItem.position)
+    const participants = await db.select().from(billParticipant).where(eq(billParticipant.billId, b.id))
+    const itemIds = items.map((i) => i.id)
+    const assignments = itemIds.length
+      ? await db.select().from(billItemAssignment).where(inArray(billItemAssignment.itemId, itemIds))
+      : []
+    const assignmentsByItem = new Map<string, string[]>()
+    for (const a of assignments) {
+      const arr = assignmentsByItem.get(a.itemId) ?? []
+      arr.push(a.participantId)
+      assignmentsByItem.set(a.itemId, arr)
+    }
+
+    const breakdown = computeBreakdown({
+      ...b,
+      createdAt: String(b.createdAt),
+      updatedAt: String(b.updatedAt),
+      items: items.map((i) => ({ ...i, participantIds: assignmentsByItem.get(i.id) ?? [] })),
+      participants,
+    })
+
+    const unpaid = breakdown.filter((p) => p.status === "unpaid" && p.total > 0)
+    if (unpaid.length === 0) continue
+    unpaidCount += unpaid.length
+
+    lines.push(`<b>${escapeHtml(b.title)}</b>`)
+    for (const p of unpaid) {
+      lines.push(`• ${escapeHtml(p.name)} — <b>${formatCurrency(p.total)}</b>`)
+    }
+    lines.push("")
+  }
+
+  if (unpaidCount === 0) return "Semua tagihan sudah lunas. 🎉"
+  return [`<b>Tagihan Belum Lunas</b>`, "", ...lines].join("\n").trim()
 }
 
 function escapeHtml(s: string): string {
