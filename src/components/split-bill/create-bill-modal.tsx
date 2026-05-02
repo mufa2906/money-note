@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Camera, Loader2 } from "lucide-react"
+import { Camera, FolderOpen, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
 
   async function createEmpty() {
     if (!title.trim()) {
@@ -125,6 +126,18 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
           </div>
 
           <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) uploadAndScan(file)
+              e.target.value = ""
+            }}
+          />
+          <input
             ref={fileRef}
             type="file"
             accept="image/*"
@@ -137,18 +150,30 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
           />
 
           <div className="grid gap-2">
-            <Button
-              variant="outline"
-              onClick={() => fileRef.current?.click()}
-              disabled={ocrLoading || submitting}
-              className="w-full"
-            >
-              {ocrLoading ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Scanning struk...</>
-              ) : (
-                <><Camera className="h-4 w-4 mr-2" /> Foto / Upload Struk</>
-              )}
-            </Button>
+            {ocrLoading ? (
+              <Button variant="outline" disabled className="w-full">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Scanning struk...
+              </Button>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => cameraRef.current?.click()}
+                  disabled={submitting}
+                  className="w-full"
+                >
+                  <Camera className="h-4 w-4 mr-2" /> Foto Langsung
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={submitting}
+                  className="w-full"
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" /> Upload
+                </Button>
+              </div>
+            )}
             <Button onClick={createEmpty} disabled={submitting || ocrLoading} className="w-full">
               {submitting ? "Membuat..." : "Buat Tagihan Kosong"}
             </Button>
