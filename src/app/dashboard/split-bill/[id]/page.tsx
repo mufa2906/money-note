@@ -57,7 +57,7 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
         ...prev,
         items: [
           ...prev.items,
-          { id: tempId, billId: id, name: data.name, price: data.price, qty: data.qty, position: prev.items.length, participantIds: [] },
+          { id: tempId, billId: id, name: data.name, price: data.price, originalPrice: null, qty: data.qty, position: prev.items.length, participantIds: [] },
         ],
       })
       const res = await fetch(`/api/bills/${id}/items`, {
@@ -424,8 +424,18 @@ function ItemRow({ item, participants, mutations }: { item: BillItem; participan
         </div>
       </div>
       <div className="text-right flex-shrink-0">
-        <p className="text-sm font-medium">{formatCurrency(item.price * item.qty)}</p>
-        {item.qty > 1 && <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}/pcs</p>}
+        {item.originalPrice && item.originalPrice > item.price ? (
+          <>
+            <p className="text-xs text-muted-foreground line-through">{formatCurrency(item.originalPrice * item.qty)}</p>
+            <p className="text-sm font-medium text-green-600 dark:text-green-400">{formatCurrency(item.price * item.qty)}</p>
+            <p className="text-[10px] text-green-600 dark:text-green-400">-{formatCurrency((item.originalPrice - item.price) * item.qty)}</p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium">{formatCurrency(item.price * item.qty)}</p>
+            {item.qty > 1 && <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}/pcs</p>}
+          </>
+        )}
       </div>
       <div className="flex flex-col gap-0.5 flex-shrink-0">
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(true)} aria-label="Edit">

@@ -8,7 +8,7 @@ const PROMPT = `Kamu adalah asisten yang membaca foto struk pembelian (Indonesia
 {
   "title": "nama tempat / restoran / toko",
   "items": [
-    { "name": "nama menu", "price": <harga satuan SETELAH diskon, integer>, "qty": <jumlah, integer minimal 1> }
+    { "name": "nama menu", "price": <harga satuan SETELAH diskon, integer>, "originalPrice": <harga satuan SEBELUM diskon, integer atau null jika tidak ada diskon>, "qty": <jumlah, integer minimal 1> }
   ],
   "charges": [
     { "name": "nama biaya tambahan", "amount": <nominal dalam Rupiah, integer> }
@@ -17,6 +17,7 @@ const PROMPT = `Kamu adalah asisten yang membaca foto struk pembelian (Indonesia
 
 Aturan untuk "items":
 - price = harga satuan SETELAH diskon (nett). Jika ada diskon/promo pada item tersebut (tertulis di baris bawahnya atau di kolom diskon), kurangkan dari harga asli sebelum dibagi qty.
+- originalPrice = harga satuan SEBELUM diskon. Isi hanya jika ada diskon/promo pada item tersebut. Jika tidak ada diskon, isi null.
 - Jika struk menunjukkan total per baris (qty × harga), bagi total dengan qty untuk mendapat harga satuan.
 - Jika tidak ada qty, asumsikan qty = 1.
 - Masukkan semua item makanan/minuman/produk ke "items". JANGAN masukkan subtotal, total, kembalian, tunai, atau biaya tambahan.
@@ -88,9 +89,11 @@ export async function POST(request: NextRequest) {
           const price = Number(it?.price)
           const qty = Math.max(1, Math.floor(Number(it?.qty) || 1))
           if (!name || !Number.isFinite(price) || price <= 0) return null
-          return { name, price, qty }
+          const rawOriginal = Number(it?.originalPrice)
+          const originalPrice = Number.isFinite(rawOriginal) && rawOriginal > price ? rawOriginal : null
+          return { name, price, originalPrice, qty }
         })
-        .filter((x): x is { name: string; price: number; qty: number } => x !== null)
+        .filter((x): x is { name: string; price: number; originalPrice: number | null; qty: number } => x !== null)
     : []
 
   const charges = Array.isArray(p?.charges)

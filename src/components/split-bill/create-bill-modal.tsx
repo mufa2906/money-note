@@ -82,7 +82,7 @@ export function CreateBillModal({ open, onOpenChange }: Props) {
           await fetch(`/api/bills/${newBill.id}/items`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: item.name, price: item.price, qty: item.qty ?? 1 }),
+            body: JSON.stringify({ name: item.name, price: item.price, originalPrice: item.originalPrice ?? null, qty: item.qty ?? 1 }),
           })
         }
       }

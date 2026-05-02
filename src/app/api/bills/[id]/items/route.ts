@@ -22,6 +22,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const existing = await db.select({ position: billItem.position }).from(billItem).where(eq(billItem.billId, id))
   const nextPos = existing.length ? Math.max(...existing.map((e) => e.position)) + 1 : 0
 
+  const rawOriginal = Number(body?.originalPrice)
+  const originalPrice = Number.isFinite(rawOriginal) && rawOriginal > 0 ? rawOriginal : null
+
   const [created] = await db
     .insert(billItem)
     .values({
@@ -29,6 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       billId: id,
       name,
       price: Number(body?.price) || 0,
+      originalPrice,
       qty: Math.max(1, Math.floor(Number(body?.qty) || 1)),
       position: nextPos,
     })

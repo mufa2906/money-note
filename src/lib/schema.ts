@@ -105,6 +105,7 @@ export const billItem = sqliteTable("bill_item", {
   billId: text("bill_id").notNull().references(() => bill.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   price: real("price").notNull(),
+  originalPrice: real("original_price"),
   qty: integer("qty").notNull().default(1),
   position: integer("position").notNull().default(0),
 })

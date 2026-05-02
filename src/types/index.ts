@@ -67,6 +67,7 @@ export interface BillItem {
   billId: string
   name: string
   price: number
+  originalPrice: number | null
   qty: number
   position: number
   participantIds: string[]
