@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { bill } from "@/lib/schema"
 import { requireAuth, generateId } from "@/lib/api-auth"
-import type { BillCharge } from "@/types"
+import type { BillCharge, BillPaymentInfo } from "@/types"
 
 function sanitizeCharges(input: unknown): BillCharge[] {
   if (!Array.isArray(input)) return []
@@ -43,11 +43,16 @@ export async function GET(request: NextRequest) {
         if (b.serviceCharge > 0) charges.push({ name: "Service Charge", amount: b.serviceCharge })
         if (b.tax > 0) charges.push({ name: "PPN", amount: b.tax })
       }
+      let paymentInfo: BillPaymentInfo | null = null
+      if (b.paymentInfo) {
+        try { paymentInfo = JSON.parse(b.paymentInfo) } catch { /* ignore */ }
+      }
       return {
         id: b.id,
         userId: b.userId,
         title: b.title,
         description: b.description ?? null,
+        paymentInfo,
         photoUrl: b.photoUrl,
         charges,
         createdAt: b.createdAt,
@@ -77,6 +82,7 @@ export async function POST(request: NextRequest) {
       description,
       photoUrl: typeof body?.photoUrl === "string" ? body.photoUrl : null,
       charges: JSON.stringify(charges),
+      paymentInfo: null,
     })
     .returning()
 

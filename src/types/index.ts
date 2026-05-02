@@ -80,6 +80,12 @@ export interface BillParticipant {
   status: SplitStatus
 }
 
+export interface BillPaymentInfo {
+  method: string
+  account: string
+  accountName: string
+}
+
 export interface BillCharge {
   name: string
   amount: number
@@ -90,6 +96,7 @@ export interface Bill {
   userId: string
   title: string
   description: string | null
+  paymentInfo: BillPaymentInfo | null
   photoUrl: string | null
   charges: BillCharge[]
   createdAt: string

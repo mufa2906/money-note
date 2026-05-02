@@ -2,7 +2,7 @@
 
 import { use, useState, useMemo, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X, Coins } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X, Coins, CreditCard, ChevronDown, ChevronUp, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,10 +14,12 @@ import { useBill } from "@/lib/hooks/use-bills"
 import { useToast } from "@/lib/hooks/use-toast"
 import { computeBreakdown, billGrandTotal } from "@/lib/bill-utils"
 import { formatCurrency } from "@/lib/utils"
-import type { BillItem, BillParticipant, BillCharge, ParticipantBreakdown, SplitStatus } from "@/types"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { BillItem, BillParticipant, BillCharge, BillPaymentInfo, ParticipantBreakdown, SplitStatus } from "@/types"
 
 interface Mutations {
-  patchBill: (updates: { title?: string; description?: string | null; charges?: BillCharge[] }) => Promise<void>
+  patchBill: (updates: { title?: string; description?: string | null; paymentInfo?: BillPaymentInfo | null; charges?: BillCharge[] }) => Promise<void>
   addItem: (data: { name: string; price: number; qty: number }) => Promise<void>
   updateItem: (itemId: string, updates: { name?: string; price?: number; qty?: number; participantIds?: string[] }) => Promise<void>
   deleteItem: (itemId: string) => Promise<void>
@@ -273,9 +275,10 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
       <ItemsSection items={bill.items} participants={bill.participants} mutations={mutations} />
       <ChargesSection charges={bill.charges} mutations={mutations} />
       <ParticipantsSection participants={bill.participants} mutations={mutations} />
+      <PaymentInfoSection paymentInfo={bill.paymentInfo} mutations={mutations} />
 
       {breakdowns.length > 0 && (
-        <BreakdownSection breakdowns={breakdowns} billTitle={bill.title} mutations={mutations} />
+        <BreakdownSection breakdowns={breakdowns} billTitle={bill.title} paymentInfo={bill.paymentInfo} mutations={mutations} />
       )}
     </div>
   )
@@ -588,58 +591,88 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
   )
 }
 
-function BreakdownSection({ breakdowns, billTitle, mutations }: { breakdowns: ParticipantBreakdown[]; billTitle: string; mutations: Mutations }) {
+function BreakdownSection({ breakdowns, billTitle, paymentInfo, mutations }: { breakdowns: ParticipantBreakdown[]; billTitle: string; paymentInfo: BillPaymentInfo | null; mutations: Mutations }) {
+  function buildWaText(b: ParticipantBreakdown) {
+    const chargesTotal = b.chargeShares.reduce((s, c) => s + c.amount, 0)
+    const hasItems = b.lineItems.length > 0
+    const hasCharges = chargesTotal > 0
+    const lines: string[] = [`Halo ${b.name}, rincian patunganmu untuk *${billTitle}*:`, ""]
+    if (hasItems) {
+      lines.push("Item:")
+      for (const li of b.lineItems) lines.push(`• ${li.name}${li.qty > 1 ? ` ×${li.qty}` : ""}: ${formatCurrency(li.share)}`)
+      lines.push(`Subtotal item: ${formatCurrency(b.itemsSubtotal)}`)
+      lines.push("")
+    }
+    if (hasCharges) {
+      lines.push("Biaya tambahan:")
+      for (const c of b.chargeShares) { if (c.amount > 0) lines.push(`• ${c.name}: ${formatCurrency(c.amount)}`) }
+      lines.push(`Subtotal biaya: ${formatCurrency(chargesTotal)}`)
+      lines.push("")
+    }
+    lines.push(`*TOTAL: ${formatCurrency(b.total)}*`)
+    if (paymentInfo) {
+      lines.push("")
+      lines.push(`Transfer ke: *${paymentInfo.method}*`)
+      lines.push(`No. Rekening: ${paymentInfo.account}`)
+      lines.push(`Atas nama: ${paymentInfo.accountName}`)
+    }
+    return lines.join("\n")
+  }
+
+  function sendToAll() {
+    const unpaid = breakdowns.filter((b) => b.status !== "paid" && b.contact)
+    if (unpaid.length === 0) return
+    for (const b of unpaid) {
+      const phone = b.contact!.replace(/\D/g, "")
+      const text = encodeURIComponent(buildWaText(b))
+      window.open(`https://wa.me/${phone}?text=${text}`, "_blank")
+    }
+  }
+
+  const unpaidWithContact = breakdowns.filter((b) => b.status !== "paid" && b.contact)
+
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Rincian per Orang</CardTitle>
+        {unpaidWithContact.length > 0 && (
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={sendToAll}>
+            <Send className="h-3 w-3 mr-1" /> Kirim ke Semua
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {breakdowns.map((b) => (
-          <BreakdownCard key={b.participantId} breakdown={b} billTitle={billTitle} mutations={mutations} />
+          <BreakdownCard key={b.participantId} breakdown={b} buildWaText={buildWaText} mutations={mutations} />
         ))}
       </CardContent>
     </Card>
   )
 }
 
-function BreakdownCard({ breakdown, billTitle, mutations }: { breakdown: ParticipantBreakdown; billTitle: string; mutations: Mutations }) {
+function BreakdownCard({ breakdown, buildWaText, mutations }: { breakdown: ParticipantBreakdown; buildWaText: (b: ParticipantBreakdown) => string; mutations: Mutations }) {
   const chargesTotal = breakdown.chargeShares.reduce((s, c) => s + c.amount, 0)
   const hasItems = breakdown.lineItems.length > 0
   const hasCharges = chargesTotal > 0
+  const [expanded, setExpanded] = useState(false)
 
   function togglePaid() {
     mutations.updateParticipant(breakdown.participantId, { status: breakdown.status === "paid" ? "unpaid" : "paid" })
   }
 
   function sendWhatsApp() {
-    const lines: string[] = [`Halo ${breakdown.name}, rincian patunganmu untuk *${billTitle}*:`, ""]
-    if (hasItems) {
-      lines.push("Item:")
-      for (const li of breakdown.lineItems) {
-        lines.push(`• ${li.name}${li.qty > 1 ? ` ×${li.qty}` : ""}: ${formatCurrency(li.share)}`)
-      }
-      lines.push(`Subtotal item: ${formatCurrency(breakdown.itemsSubtotal)}`)
-      lines.push("")
-    }
-    if (hasCharges) {
-      lines.push("Biaya tambahan:")
-      for (const c of breakdown.chargeShares) {
-        if (c.amount > 0) lines.push(`• ${c.name}: ${formatCurrency(c.amount)}`)
-      }
-      lines.push(`Subtotal biaya: ${formatCurrency(chargesTotal)}`)
-      lines.push("")
-    }
-    lines.push(`*TOTAL: ${formatCurrency(breakdown.total)}*`)
     const phone = breakdown.contact ? breakdown.contact.replace(/\D/g, "") : ""
-    const text = encodeURIComponent(lines.join("\n"))
+    const text = encodeURIComponent(buildWaText(breakdown))
     window.open(`https://wa.me/${phone}?text=${text}`, "_blank")
   }
 
   return (
-    <div className="rounded-md border p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+    <div className="rounded-md border">
+      <button
+        className="w-full flex items-center justify-between gap-2 p-3 text-left"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="font-medium text-sm">{breakdown.name}</p>
             {breakdown.status === "paid" && (
@@ -648,60 +681,140 @@ function BreakdownCard({ breakdown, billTitle, mutations }: { breakdown: Partici
           </div>
           {breakdown.contact && <p className="text-xs text-muted-foreground">{breakdown.contact}</p>}
         </div>
-        <p className="text-base font-bold">{formatCurrency(breakdown.total)}</p>
-      </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <p className="text-base font-bold">{formatCurrency(breakdown.total)}</p>
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
 
-      {(hasItems || hasCharges) && (
-        <div className="mt-3 space-y-2 text-xs">
-          {hasItems && (
-            <div className="space-y-0.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Item</p>
-              {breakdown.lineItems.map((li, idx) => (
-                <div key={idx} className="flex justify-between text-muted-foreground">
-                  <span className="truncate pr-2">• {li.name}{li.qty > 1 ? ` ×${li.qty}` : ""}</span>
-                  <span className="tabular-nums">{formatCurrency(li.share)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between pt-0.5 border-t border-dashed">
-                <span className="font-medium">Subtotal item</span>
-                <span className="font-medium tabular-nums">{formatCurrency(breakdown.itemsSubtotal)}</span>
-              </div>
-            </div>
-          )}
-
-          {hasCharges && (
-            <div className="space-y-0.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Biaya Tambahan</p>
-              {breakdown.chargeShares.map((c, idx) => (
-                c.amount > 0 ? (
-                  <div key={`c-${idx}`} className="flex justify-between text-muted-foreground">
-                    <span className="truncate pr-2">• {c.name}</span>
-                    <span className="tabular-nums">{formatCurrency(c.amount)}</span>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-3 border-t pt-3">
+          {(hasItems || hasCharges) && (
+            <div className="space-y-2 text-xs">
+              {hasItems && (
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Item</p>
+                  {breakdown.lineItems.map((li, idx) => (
+                    <div key={idx} className="flex justify-between text-muted-foreground">
+                      <span className="truncate pr-2">• {li.name}{li.qty > 1 ? ` ×${li.qty}` : ""}</span>
+                      <span className="tabular-nums">{formatCurrency(li.share)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-0.5 border-t border-dashed">
+                    <span className="font-medium">Subtotal item</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(breakdown.itemsSubtotal)}</span>
                   </div>
-                ) : null
-              ))}
-              <div className="flex justify-between pt-0.5 border-t border-dashed">
-                <span className="font-medium">Subtotal biaya</span>
-                <span className="font-medium tabular-nums">{formatCurrency(chargesTotal)}</span>
+                </div>
+              )}
+              {hasCharges && (
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Biaya Tambahan</p>
+                  {breakdown.chargeShares.map((c, idx) => (
+                    c.amount > 0 ? (
+                      <div key={`c-${idx}`} className="flex justify-between text-muted-foreground">
+                        <span className="truncate pr-2">• {c.name}</span>
+                        <span className="tabular-nums">{formatCurrency(c.amount)}</span>
+                      </div>
+                    ) : null
+                  ))}
+                  <div className="flex justify-between pt-0.5 border-t border-dashed">
+                    <span className="font-medium">Subtotal biaya</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(chargesTotal)}</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-between pt-1.5 border-t-2">
+                <span className="font-bold text-sm">TOTAL</span>
+                <span className="font-bold text-sm tabular-nums">{formatCurrency(breakdown.total)}</span>
               </div>
             </div>
           )}
-
-          <div className="flex justify-between pt-1.5 border-t-2">
-            <span className="font-bold text-sm">TOTAL</span>
-            <span className="font-bold text-sm tabular-nums">{formatCurrency(breakdown.total)}</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={sendWhatsApp}>
+              <MessageCircle className="h-3 w-3 mr-1" /> Kirim WA
+            </Button>
+            <Button size="sm" className="h-7 text-xs flex-1" variant={breakdown.status === "paid" ? "outline" : "default"} onClick={togglePaid}>
+              {breakdown.status === "paid" ? "Tandai Belum Lunas" : "Tandai Lunas"}
+            </Button>
           </div>
         </div>
       )}
-
-      <div className="mt-3 flex gap-2">
-        <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={sendWhatsApp}>
-          <MessageCircle className="h-3 w-3 mr-1" /> Kirim WA
-        </Button>
-        <Button size="sm" className="h-7 text-xs flex-1" variant={breakdown.status === "paid" ? "outline" : "default"} onClick={togglePaid}>
-          {breakdown.status === "paid" ? "Tandai Belum Lunas" : "Tandai Lunas"}
-        </Button>
-      </div>
     </div>
+  )
+}
+
+const PAYMENT_METHODS = ["BCA", "Mandiri", "BNI", "BRI", "GoPay", "OVO", "DANA", "ShopeePay", "SeaBank", "Jago", "Lainnya"]
+
+function PaymentInfoSection({ paymentInfo, mutations }: { paymentInfo: BillPaymentInfo | null; mutations: Mutations }) {
+  const [editing, setEditing] = useState(false)
+  const [method, setMethod] = useState(paymentInfo?.method ?? "BCA")
+  const [account, setAccount] = useState(paymentInfo?.account ?? "")
+  const [accountName, setAccountName] = useState(paymentInfo?.accountName ?? "")
+
+  function openEdit() {
+    setMethod(paymentInfo?.method ?? "BCA")
+    setAccount(paymentInfo?.account ?? "")
+    setAccountName(paymentInfo?.accountName ?? "")
+    setEditing(true)
+  }
+
+  async function save() {
+    if (!account.trim() || !accountName.trim()) return
+    await mutations.patchBill({ paymentInfo: { method, account: account.trim(), accountName: accountName.trim() } })
+    setEditing(false)
+  }
+
+  async function remove() {
+    await mutations.patchBill({ paymentInfo: null })
+    setEditing(false)
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4" /> Rekening Tujuan</CardTitle>
+        {!editing && (
+          <Button size="sm" variant="outline" onClick={openEdit}>
+            <Pencil className="h-3.5 w-3.5 mr-1" /> {paymentInfo ? "Edit" : "Tambah"}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        {editing ? (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Bank / E-Money</Label>
+              <Select value={method} onValueChange={setMethod}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Nomor Rekening / No. HP</Label>
+              <Input className="h-8 text-sm" placeholder="081234567890" value={account} onChange={(e) => setAccount(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Atas Nama</Label>
+              <Input className="h-8 text-sm" placeholder="Nama pemilik rekening" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={save} className="flex-1" disabled={!account.trim() || !accountName.trim()}>Simpan</Button>
+              {paymentInfo && <Button size="sm" variant="destructive" onClick={remove}>Hapus</Button>}
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Batal</Button>
+            </div>
+          </div>
+        ) : paymentInfo ? (
+          <div className="rounded-md bg-muted/50 px-3 py-2 space-y-0.5">
+            <p className="text-sm font-medium">{paymentInfo.method}</p>
+            <p className="text-sm tabular-nums">{paymentInfo.account}</p>
+            <p className="text-xs text-muted-foreground">a.n. {paymentInfo.accountName}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-2">Belum ada rekening tujuan. Tambahkan agar peserta tahu mau transfer ke mana.</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }

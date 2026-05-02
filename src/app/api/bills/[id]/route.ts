@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { bill, billItem, billParticipant, billItemAssignment } from "@/lib/schema"
 import { requireAuth } from "@/lib/api-auth"
-import type { BillCharge } from "@/types"
+import type { BillCharge, BillPaymentInfo } from "@/types"
 
 async function loadBill(billId: string, userId: string) {
   const [b] = await db
@@ -75,11 +75,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     assignmentsByItem.set(a.itemId, arr)
   }
 
+  let paymentInfo: BillPaymentInfo | null = null
+  if (b.paymentInfo) {
+    try { paymentInfo = JSON.parse(b.paymentInfo) } catch { /* ignore */ }
+  }
+
   return NextResponse.json({
     id: b.id,
     userId: b.userId,
     title: b.title,
     description: b.description ?? null,
+    paymentInfo,
     photoUrl: b.photoUrl,
     charges: parseCharges(b),
     createdAt: b.createdAt,
@@ -101,6 +107,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   if (typeof body?.title === "string" && body.title.trim()) updates.title = body.title.trim()
   if (body?.description !== undefined) updates.description = typeof body.description === "string" ? body.description.trim() || null : null
+  if (body?.paymentInfo !== undefined) {
+    if (body.paymentInfo === null) {
+      updates.paymentInfo = null
+    } else if (typeof body.paymentInfo === "object") {
+      const { method, account, accountName } = body.paymentInfo as Record<string, unknown>
+      if (typeof method === "string" && typeof account === "string" && typeof accountName === "string") {
+        updates.paymentInfo = JSON.stringify({ method: method.trim(), account: account.trim(), accountName: accountName.trim() })
+      }
+    }
+  }
   if (body?.photoUrl !== undefined) updates.photoUrl = body.photoUrl ?? null
   if (body?.charges !== undefined) {
     const sanitized = sanitizeCharges(body.charges)
