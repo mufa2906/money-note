@@ -74,6 +74,30 @@ export async function editTelegramMessage(
   return res.ok
 }
 
+export async function editTelegramMessageWithKeyboard(
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  keyboard: InlineKeyboardButton[][],
+) {
+  const res = await fetch(`${TELEGRAM_API_BASE}/bot${getToken()}/editMessageText`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: keyboard },
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    console.error("Telegram editMessageText+keyboard failed:", res.status, body)
+  }
+  return res.ok
+}
+
 export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   await fetch(`${TELEGRAM_API_BASE}/bot${getToken()}/answerCallbackQuery`, {
     method: "POST",

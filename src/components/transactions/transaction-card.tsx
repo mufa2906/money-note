@@ -19,9 +19,10 @@ interface TransactionCardProps {
   transaction: Transaction
   onDeleted?: () => void
   onEdit?: (transaction: Transaction) => void
+  hideDate?: boolean
 }
 
-export function TransactionCard({ transaction: t, onDeleted, onEdit }: TransactionCardProps) {
+export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }: TransactionCardProps) {
   const cat = CATEGORY_MAP[t.category]
   const { toast } = useToast()
   const { refetch: refetchTransactions } = useTransactions()
@@ -46,7 +47,7 @@ export function TransactionCard({ transaction: t, onDeleted, onEdit }: Transacti
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{t.description}</p>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-muted-foreground">{formatDate(t.transactionDate)}</span>
+          {!hideDate && <span className="text-xs text-muted-foreground">{formatDate(t.transactionDate)}</span>}
           <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4">{cat?.label}</Badge>
           {t.source === "bot" && (
             <Badge variant="outline" className="text-xs py-0 px-1.5 h-4">Bot</Badge>

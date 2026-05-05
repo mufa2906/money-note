@@ -46,6 +46,7 @@ export interface Transaction {
   description: string
   transactionDate: string
   source: "manual" | "bot" | "import"
+  createdAt: string
 }
 
 export type SplitStatus = "unpaid" | "paid"

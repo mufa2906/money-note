@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   if (error) return error
 
   const { searchParams } = new URL(request.url)
-  const limit = Number(searchParams.get("limit") ?? 100)
+  const limit = Number(searchParams.get("limit") ?? 500)
 
   const rows = await db
     .select()

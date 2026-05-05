@@ -8,9 +8,11 @@ import {
   sendTelegramMessage,
   sendTelegramWithKeyboard,
   editTelegramMessage,
+  editTelegramMessageWithKeyboard,
   answerCallbackQuery,
   verifyTelegramSecret,
   type TelegramUpdate,
+  type InlineKeyboardButton,
 } from "@/lib/telegram"
 import { formatCurrency } from "@/lib/utils"
 
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   try {
     if (update.callback_query) {
-      await handleCategoryCallback(update.callback_query)
+      await handleCallback(update.callback_query)
       return NextResponse.json({ ok: true })
     }
 
@@ -90,9 +92,10 @@ async function handleCommand(chatId: number, text: string): Promise<string | nul
 function helpMessage(): string {
   return [
     "<b>Perintah MoneyNote Bot:</b>",
+    "<code>/catat 50000 - BCA - makanan - makan siang</code> — format lengkap",
+    "<code>/catat 50000 makan siang</code> — format singkat (pilih akun & kategori lewat tombol)",
+    "<code>/catat masuk 1000000 - BCA - gaji - gaji bulanan</code> — pemasukan format lengkap",
     "<code>/saldo</code> — total saldo semua akun",
-    "<code>/catat 50000 makan siang</code> — catat pengeluaran (pilih kategori lewat tombol)",
-    "<code>/catat masuk 1000000 gaji bulanan</code> — catat pemasukan",
     "<code>/ringkasan</code> — ringkasan bulan ini",
     "<code>/tagihan</code> — daftar bagi tagihan belum lunas",
     "<code>/bantuan</code> — tampilkan pesan ini",
@@ -177,96 +180,219 @@ function detectCategory(description: string, type: "income" | "expense"): string
   return type === "income" ? "gaji" : "lainnya"
 }
 
-interface ParsedRecord {
+interface TelegramPending {
+  step: "select_account" | "select_category" | "confirm"
   type: "income" | "expense"
-  category: string | null
   amount: number
   description: string
+  accountId?: string
+  accountName?: string
+  category?: string
+  autoCategory?: string
 }
 
-function parseRecord(args: string): ParsedRecord | null {
-  const parts = args.trim().split(/\s+/)
-  let idx = 0
+function parseNewFormat(args: string): {
+  type: "income" | "expense"
+  amount: number
+  accountHint: string
+  category: string
+  description: string
+} | null {
+  const dashParts = args.split("-").map((s) => s.trim())
+  if (dashParts.length < 4) return null
 
+  let nominalPart = dashParts[0]
   let type: "income" | "expense" = "expense"
-  if (parts[idx] && TYPE_WORDS.has(parts[idx].toLowerCase())) {
-    type = parts[idx].toLowerCase() === "masuk" || parts[idx].toLowerCase() === "income" ? "income" : "expense"
-    idx++
+
+  const words = nominalPart.trim().split(/\s+/)
+  if (words[0] && TYPE_WORDS.has(words[0].toLowerCase())) {
+    type = ["masuk", "income"].includes(words[0].toLowerCase()) ? "income" : "expense"
+    nominalPart = words.slice(1).join(" ")
   }
 
-  let category: string | null = null
-  if (parts[idx] && CATEGORY_ALIASES[parts[idx].toLowerCase()]) {
-    category = CATEGORY_ALIASES[parts[idx].toLowerCase()]
-    idx++
-  }
-
-  if (!parts[idx]) return null
-  const amount = Number(parts[idx].replace(/[.,]/g, ""))
+  const amount = Number(nominalPart.replace(/[.,]/g, ""))
   if (!Number.isFinite(amount) || amount <= 0) return null
-  idx++
 
-  if (!parts[idx]) return null
-  const description = parts.slice(idx).join(" ")
+  const accountHint = dashParts[1]
+  const categoryRaw = dashParts[2].toLowerCase().trim()
+  const category = CATEGORY_ALIASES[categoryRaw]
+  if (!category) return null
 
-  return { type, category, amount, description }
+  const description = dashParts.slice(3).join(" - ").trim()
+  if (!description) return null
+
+  return { type, amount, accountHint, category, description }
+}
+
+function buildAccountKeyboard(
+  accounts: { id: string; accountName: string }[],
+): InlineKeyboardButton[][] {
+  const rows: InlineKeyboardButton[][] = []
+  for (let i = 0; i < accounts.length; i += 2) {
+    rows.push(
+      accounts.slice(i, i + 2).map((a) => ({
+        text: a.accountName,
+        callback_data: `acc:${a.id}`,
+      }))
+    )
+  }
+  return rows
+}
+
+function buildCategoryKeyboard(highlighted?: string): InlineKeyboardButton[][] {
+  return CAT_ROWS.map((row) =>
+    row.map((val) => ({
+      text: val === highlighted ? `✓ ${CAT_LABELS[val]}` : CAT_LABELS[val],
+      callback_data: `cat:${val}`,
+    }))
+  )
 }
 
 async function handleRecord(userId: string, chatId: number, args: string): Promise<string | null> {
-  const parsed = parseRecord(args)
-  if (!parsed) {
+  if (!args) {
     return [
-      "Format salah. Contoh:",
+      "Format lengkap: <code>/catat {nominal} - {akun} - {kategori} - {deskripsi}</code>",
+      "Contoh: <code>/catat 50000 - BCA - makanan - makan siang</code>",
+      "",
+      "Format singkat (pilih akun & kategori lewat tombol):",
       "<code>/catat 50000 makan siang</code>",
-      "<code>/catat masuk 1000000 gaji bulanan</code>",
     ].join("\n")
   }
 
-  const { type, amount, description } = parsed
-  const autoCategory = parsed.category ?? detectCategory(description, type)
-
-  const [account] = await db
+  const accounts = await db
     .select()
     .from(walletAccount)
     .where(eq(walletAccount.userId, userId))
     .orderBy(walletAccount.createdAt)
-    .limit(1)
-  if (!account) return "Belum ada akun. Tambahkan akun lewat aplikasi dulu."
 
-  await db
-    .update(user)
-    .set({
-      telegramPending: JSON.stringify({ type, amount, description, accountId: account.id, accountName: account.accountName }),
-      updatedAt: new Date(),
-    })
-    .where(eq(user.telegramId, String(chatId)))
+  if (!accounts.length) return "Belum ada akun. Tambahkan akun lewat aplikasi dulu."
 
-  const keyboard = CAT_ROWS.map((row) =>
-    row.map((val) => ({
-      text: val === autoCategory ? `✓ ${CAT_LABELS[val]}` : CAT_LABELS[val],
-      callback_data: `cat:${val}`,
-    }))
-  )
+  const newFmt = parseNewFormat(args)
+  if (newFmt) {
+    const matchedAccount = accounts.find(
+      (a) =>
+        a.accountName.toLowerCase().includes(newFmt.accountHint.toLowerCase()) ||
+        newFmt.accountHint.toLowerCase().includes(a.accountName.toLowerCase())
+    )
+
+    if (matchedAccount) {
+      const pending: TelegramPending = {
+        step: "confirm",
+        type: newFmt.type,
+        amount: newFmt.amount,
+        description: newFmt.description,
+        accountId: matchedAccount.id,
+        accountName: matchedAccount.accountName,
+        category: newFmt.category,
+      }
+      await savePending(chatId, pending)
+
+      const header = newFmt.type === "income" ? "Pemasukan" : "Pengeluaran"
+      await sendTelegramWithKeyboard(
+        chatId,
+        [
+          `${header} <b>${formatCurrency(newFmt.amount)}</b>`,
+          `${escapeHtml(newFmt.description)}`,
+          `Akun: <b>${escapeHtml(matchedAccount.accountName)}</b> · Kategori: <b>${CAT_LABELS[newFmt.category]}</b>`,
+          "",
+          "Konfirmasi?",
+        ].join("\n"),
+        [
+          [
+            { text: "✅ Ya, Catat", callback_data: "confirm:yes" },
+            { text: "❌ Batal", callback_data: "confirm:no" },
+          ],
+        ],
+      )
+      return null
+    }
+
+    // Account not found — show account selection
+    const pending: TelegramPending = {
+      step: "select_account",
+      type: newFmt.type,
+      amount: newFmt.amount,
+      description: newFmt.description,
+      category: newFmt.category,
+    }
+    await savePending(chatId, pending)
+
+    const header = newFmt.type === "income"
+      ? `Pemasukan <b>${formatCurrency(newFmt.amount)}</b>`
+      : `Pengeluaran <b>${formatCurrency(newFmt.amount)}</b>`
+    await sendTelegramWithKeyboard(
+      chatId,
+      `${header} — ${escapeHtml(newFmt.description)}\nAkun "<b>${escapeHtml(newFmt.accountHint)}</b>" tidak ditemukan. Pilih akun:`,
+      buildAccountKeyboard(accounts),
+    )
+    return null
+  }
+
+  // Short format: try to parse amount + description
+  const parts = args.trim().split(/\s+/)
+  let idx = 0
+  let type: "income" | "expense" = "expense"
+  if (parts[idx] && TYPE_WORDS.has(parts[idx].toLowerCase())) {
+    type = ["masuk", "income"].includes(parts[idx].toLowerCase()) ? "income" : "expense"
+    idx++
+  }
+
+  const amount = Number(parts[idx]?.replace(/[.,]/g, ""))
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return [
+      "Format lengkap: <code>/catat {nominal} - {akun} - {kategori} - {deskripsi}</code>",
+      "Contoh: <code>/catat 50000 - BCA - makanan - makan siang</code>",
+      "",
+      "Format singkat:",
+      "<code>/catat 50000 makan siang</code>",
+      "<code>/catat masuk 1000000 gaji bulanan</code>",
+    ].join("\n")
+  }
+  idx++
+
+  const description = parts.slice(idx).join(" ")
+  if (!description) {
+    return [
+      "Format lengkap: <code>/catat {nominal} - {akun} - {kategori} - {deskripsi}</code>",
+      "Contoh: <code>/catat 50000 - BCA - makanan - makan siang</code>",
+    ].join("\n")
+  }
+
+  const autoCategory = detectCategory(description, type)
+  const pending: TelegramPending = {
+    step: "select_account",
+    type,
+    amount,
+    description,
+    autoCategory,
+  }
+  await savePending(chatId, pending)
 
   const header = type === "income"
     ? `Pemasukan <b>${formatCurrency(amount)}</b>`
     : `Pengeluaran <b>${formatCurrency(amount)}</b>`
-
   await sendTelegramWithKeyboard(
     chatId,
-    `${header} — ${escapeHtml(description)}\nAkun: ${escapeHtml(account.accountName)}\n\nPilih kategori:`,
-    keyboard,
+    `${header} — ${escapeHtml(description)}\nPilih akun:`,
+    buildAccountKeyboard(accounts),
   )
   return null
 }
 
-async function handleCategoryCallback(cb: NonNullable<TelegramUpdate["callback_query"]>) {
+async function savePending(chatId: number, pending: TelegramPending) {
+  await db
+    .update(user)
+    .set({ telegramPending: JSON.stringify(pending), updatedAt: new Date() })
+    .where(eq(user.telegramId, String(chatId)))
+}
+
+async function handleCallback(cb: NonNullable<TelegramUpdate["callback_query"]>) {
   const chatId = cb.message?.chat.id
   const messageId = cb.message?.message_id
-  const category = cb.data?.startsWith("cat:") ? cb.data.slice(4) : null
+  const data = cb.data
 
   await answerCallbackQuery(cb.id)
-
-  if (!chatId || !messageId || !category) return
+  if (!chatId || !messageId || !data) return
 
   const linked = await getLinkedUser(chatId)
   if (!linked?.telegramPending) {
@@ -274,52 +400,157 @@ async function handleCategoryCallback(cb: NonNullable<TelegramUpdate["callback_q
     return
   }
 
-  const pending = JSON.parse(linked.telegramPending) as {
-    type: "income" | "expense"
-    amount: number
-    description: string
-    accountId: string
-    accountName: string
+  const pending = JSON.parse(linked.telegramPending) as TelegramPending & {
+    // legacy shape (no step field)
+    accountId?: string
+    accountName?: string
   }
 
+  // ── Account selection ──────────────────────────────────────────────────────
+  if (data.startsWith("acc:")) {
+    const accountId = data.slice(4)
+    const [account] = await db.select().from(walletAccount).where(eq(walletAccount.id, accountId)).limit(1)
+    if (!account) {
+      await editTelegramMessage(chatId, messageId, "Akun tidak ditemukan. Ulangi dengan /catat.")
+      return
+    }
+
+    const updatedPending: TelegramPending = {
+      ...pending,
+      step: "select_category",
+      accountId: account.id,
+      accountName: account.accountName,
+    }
+
+    // If category was already set from new-format input, go straight to confirm
+    if (updatedPending.category) {
+      updatedPending.step = "confirm"
+      await db
+        .update(user)
+        .set({ telegramPending: JSON.stringify(updatedPending), updatedAt: new Date() })
+        .where(eq(user.id, linked.id))
+
+      const header = updatedPending.type === "income" ? "Pemasukan" : "Pengeluaran"
+      await editTelegramMessageWithKeyboard(
+        chatId,
+        messageId,
+        [
+          `${header} <b>${formatCurrency(updatedPending.amount)}</b>`,
+          `${escapeHtml(updatedPending.description)}`,
+          `Akun: <b>${escapeHtml(account.accountName)}</b> · Kategori: <b>${CAT_LABELS[updatedPending.category]}</b>`,
+          "",
+          "Konfirmasi?",
+        ].join("\n"),
+        [
+          [
+            { text: "✅ Ya, Catat", callback_data: "confirm:yes" },
+            { text: "❌ Batal", callback_data: "confirm:no" },
+          ],
+        ],
+      )
+      return
+    }
+
+    // No category yet — show category keyboard
+    await db
+      .update(user)
+      .set({ telegramPending: JSON.stringify(updatedPending), updatedAt: new Date() })
+      .where(eq(user.id, linked.id))
+
+    const highlighted = pending.autoCategory ?? detectCategory(pending.description, pending.type)
+    const header = pending.type === "income"
+      ? `Pemasukan <b>${formatCurrency(pending.amount)}</b>`
+      : `Pengeluaran <b>${formatCurrency(pending.amount)}</b>`
+    await editTelegramMessageWithKeyboard(
+      chatId,
+      messageId,
+      `${header} — ${escapeHtml(pending.description)}\nAkun: <b>${escapeHtml(account.accountName)}</b>\n\nPilih kategori:`,
+      buildCategoryKeyboard(highlighted),
+    )
+    return
+  }
+
+  // ── Category selection ─────────────────────────────────────────────────────
+  if (data.startsWith("cat:")) {
+    const category = data.slice(4)
+
+    // Support legacy pending (no step field, accountId already set)
+    const accountId = pending.accountId
+    const accountName = pending.accountName
+    if (!accountId || !accountName) {
+      await editTelegramMessage(chatId, messageId, "Sesi kedaluwarsa. Ulangi dengan /catat.")
+      return
+    }
+
+    await saveTransaction(linked.id, chatId, messageId, { ...pending, accountId, accountName, category })
+    return
+  }
+
+  // ── Confirm / Cancel ───────────────────────────────────────────────────────
+  if (data === "confirm:no") {
+    await db.update(user).set({ telegramPending: null, updatedAt: new Date() }).where(eq(user.id, linked.id))
+    await editTelegramMessage(chatId, messageId, "❌ Transaksi dibatalkan.")
+    return
+  }
+
+  if (data === "confirm:yes") {
+    const { accountId, accountName, category } = pending
+    if (!accountId || !accountName || !category) {
+      await editTelegramMessage(chatId, messageId, "Sesi tidak lengkap. Ulangi dengan /catat.")
+      return
+    }
+    await saveTransaction(linked.id, chatId, messageId, { ...pending, accountId, accountName, category })
+  }
+}
+
+async function saveTransaction(
+  userId: string,
+  chatId: number,
+  messageId: number,
+  data: TelegramPending & { accountId: string; accountName: string; category: string },
+) {
   const today = new Date().toISOString().slice(0, 10)
   await db.insert(transaction).values({
     id: generateId(),
-    userId: linked.id,
-    walletAccountId: pending.accountId,
-    amount: pending.amount,
-    type: pending.type,
-    category,
-    description: pending.description,
+    userId,
+    walletAccountId: data.accountId,
+    amount: data.amount,
+    type: data.type,
+    category: data.category,
+    description: data.description,
     transactionDate: today,
     source: "bot",
   })
 
-  const delta = pending.type === "income" ? pending.amount : -pending.amount
+  const delta = data.type === "income" ? data.amount : -data.amount
   await db
     .update(walletAccount)
     .set({ balance: sql`${walletAccount.balance} + ${delta}` })
-    .where(eq(walletAccount.id, pending.accountId))
+    .where(eq(walletAccount.id, data.accountId))
 
   await db
     .update(user)
     .set({ telegramPending: null, updatedAt: new Date() })
-    .where(eq(user.id, linked.id))
+    .where(eq(user.id, userId))
 
   await db.insert(notification).values({
     id: generateId(),
-    userId: linked.id,
+    userId,
     kind: "transaction_added",
-    title: pending.type === "income" ? "Pemasukan via Telegram" : "Pengeluaran via Telegram",
-    body: `${pending.description} — ${formatCurrency(pending.amount)}`,
+    title: data.type === "income" ? "Pemasukan via Telegram" : "Pengeluaran via Telegram",
+    body: `${data.description} — ${formatCurrency(data.amount)}`,
   })
 
-  const catLabel = CAT_LABELS[category] ?? category
-  await editTelegramMessage(chatId, messageId, [
-    pending.type === "income" ? "✅ Pemasukan dicatat!" : "✅ Pengeluaran dicatat!",
-    `${escapeHtml(pending.description)} — <b>${formatCurrency(pending.amount)}</b>`,
-    `Kategori: ${catLabel} | Akun: ${escapeHtml(pending.accountName)}`,
-  ].join("\n"))
+  const catLabel = CAT_LABELS[data.category] ?? data.category
+  await editTelegramMessage(
+    chatId,
+    messageId,
+    [
+      data.type === "income" ? "✅ Pemasukan dicatat!" : "✅ Pengeluaran dicatat!",
+      `${escapeHtml(data.description)} — <b>${formatCurrency(data.amount)}</b>`,
+      `Kategori: ${catLabel} · Akun: ${escapeHtml(data.accountName)}`,
+    ].join("\n"),
+  )
 }
 
 async function handleSummary(userId: string): Promise<string> {

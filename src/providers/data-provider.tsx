@@ -32,6 +32,7 @@ function mapTransactionRow(row: Record<string, unknown>): Transaction {
     description: row.description as string,
     transactionDate: row.transactionDate as string,
     source: row.source as "manual" | "bot" | "import",
+    createdAt: row.createdAt ? String(row.createdAt) : new Date().toISOString(),
   }
 }
 
