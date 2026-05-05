@@ -24,37 +24,43 @@ function daysAgo(n: number): string {
   return d.toISOString().split("T")[0]
 }
 
+function isoAgo(n: number): string {
+  const d = new Date(today)
+  d.setDate(d.getDate() - n)
+  return d.toISOString()
+}
+
 export const MOCK_TRANSACTIONS: Transaction[] = [
-  { id: "txn_01", userId: "usr_01", accountId: "acc_01", amount: 8_500_000, type: "income", category: "gaji", description: "Gaji Bulan April", transactionDate: daysAgo(2), source: "manual" },
-  { id: "txn_02", userId: "usr_01", accountId: "acc_01", amount: 45_000, type: "expense", category: "makanan", description: "Makan siang Warteg", transactionDate: daysAgo(0), source: "bot" },
-  { id: "txn_03", userId: "usr_01", accountId: "acc_02", amount: 25_000, type: "expense", category: "transportasi", description: "Grab ke kantor", transactionDate: daysAgo(0), source: "bot" },
-  { id: "txn_04", userId: "usr_01", accountId: "acc_01", amount: 350_000, type: "expense", category: "belanja", description: "Beli baju di Uniqlo", transactionDate: daysAgo(1), source: "manual" },
-  { id: "txn_05", userId: "usr_01", accountId: "acc_02", amount: 80_000, type: "expense", category: "makanan", description: "Kopi dan snack", transactionDate: daysAgo(1), source: "bot" },
-  { id: "txn_06", userId: "usr_01", accountId: "acc_01", amount: 500_000, type: "expense", category: "tagihan", description: "Tagihan listrik PLN", transactionDate: daysAgo(3), source: "manual" },
-  { id: "txn_07", userId: "usr_01", accountId: "acc_01", amount: 150_000, type: "expense", category: "tagihan", description: "Paket internet Telkomsel", transactionDate: daysAgo(3), source: "manual" },
-  { id: "txn_08", userId: "usr_01", accountId: "acc_02", amount: 30_000, type: "expense", category: "transportasi", description: "Parkir mall", transactionDate: daysAgo(4), source: "manual" },
-  { id: "txn_09", userId: "usr_01", accountId: "acc_01", amount: 200_000, type: "expense", category: "hiburan", description: "Nonton bioskop berdua", transactionDate: daysAgo(5), source: "manual" },
-  { id: "txn_10", userId: "usr_01", accountId: "acc_01", amount: 75_000, type: "expense", category: "makanan", description: "Makan malam restoran", transactionDate: daysAgo(5), source: "bot" },
-  { id: "txn_11", userId: "usr_01", accountId: "acc_02", amount: 50_000, type: "expense", category: "makanan", description: "Beli sayur pasar", transactionDate: daysAgo(6), source: "bot" },
-  { id: "txn_12", userId: "usr_01", accountId: "acc_01", amount: 120_000, type: "expense", category: "kesehatan", description: "Beli obat apotek", transactionDate: daysAgo(7), source: "manual" },
-  { id: "txn_13", userId: "usr_01", accountId: "acc_01", amount: 250_000, type: "expense", category: "belanja", description: "Belanja kebutuhan rumah", transactionDate: daysAgo(8), source: "manual" },
-  { id: "txn_14", userId: "usr_01", accountId: "acc_02", amount: 35_000, type: "expense", category: "transportasi", description: "GoRide ke pasar", transactionDate: daysAgo(8), source: "bot" },
-  { id: "txn_15", userId: "usr_01", accountId: "acc_01", amount: 500_000, type: "income", category: "lainnya", description: "Transfer dari teman", transactionDate: daysAgo(10), source: "manual" },
-  { id: "txn_16", userId: "usr_01", accountId: "acc_01", amount: 180_000, type: "expense", category: "hiburan", description: "Berlangganan Netflix", transactionDate: daysAgo(10), source: "manual" },
-  { id: "txn_17", userId: "usr_01", accountId: "acc_02", amount: 65_000, type: "expense", category: "makanan", description: "GoFood makan siang", transactionDate: daysAgo(11), source: "bot" },
-  { id: "txn_18", userId: "usr_01", accountId: "acc_01", amount: 300_000, type: "expense", category: "pendidikan", description: "Buku pemrograman", transactionDate: daysAgo(12), source: "manual" },
-  { id: "txn_19", userId: "usr_01", accountId: "acc_01", amount: 90_000, type: "expense", category: "transportasi", description: "Bensin motor", transactionDate: daysAgo(13), source: "bot" },
-  { id: "txn_20", userId: "usr_01", accountId: "acc_02", amount: 40_000, type: "expense", category: "makanan", description: "Jajan bakso", transactionDate: daysAgo(14), source: "bot" },
-  { id: "txn_21", userId: "usr_01", accountId: "acc_01", amount: 8_200_000, type: "income", category: "gaji", description: "Gaji Bulan Maret", transactionDate: daysAgo(32), source: "manual" },
-  { id: "txn_22", userId: "usr_01", accountId: "acc_01", amount: 450_000, type: "expense", category: "tagihan", description: "Cicilan kartu kredit", transactionDate: daysAgo(33), source: "manual" },
-  { id: "txn_23", userId: "usr_01", accountId: "acc_01", amount: 130_000, type: "expense", category: "belanja", description: "Beli peralatan mandi", transactionDate: daysAgo(35), source: "manual" },
-  { id: "txn_24", userId: "usr_01", accountId: "acc_02", amount: 55_000, type: "expense", category: "makanan", description: "Sarapan nasi uduk", transactionDate: daysAgo(36), source: "bot" },
-  { id: "txn_25", userId: "usr_01", accountId: "acc_01", amount: 400_000, type: "expense", category: "kesehatan", description: "Periksa dokter gigi", transactionDate: daysAgo(38), source: "manual" },
-  { id: "txn_26", userId: "usr_01", accountId: "acc_01", amount: 220_000, type: "expense", category: "hiburan", description: "Karaoke dengan teman", transactionDate: daysAgo(40), source: "manual" },
-  { id: "txn_27", userId: "usr_01", accountId: "acc_02", amount: 70_000, type: "expense", category: "transportasi", description: "Taxi Blue Bird", transactionDate: daysAgo(42), source: "bot" },
-  { id: "txn_28", userId: "usr_01", accountId: "acc_01", amount: 1_000_000, type: "income", category: "lainnya", description: "Bonus proyek freelance", transactionDate: daysAgo(45), source: "manual" },
-  { id: "txn_29", userId: "usr_01", accountId: "acc_01", amount: 85_000, type: "expense", category: "makanan", description: "Makan siang bersama tim", transactionDate: daysAgo(48), source: "bot" },
-  { id: "txn_30", userId: "usr_01", accountId: "acc_01", amount: 600_000, type: "expense", category: "tagihan", description: "Tagihan air PDAM", transactionDate: daysAgo(50), source: "manual" },
+  { id: "txn_01", userId: "usr_01", accountId: "acc_01", amount: 8_500_000, type: "income", category: "gaji", description: "Gaji Bulan April", transactionDate: daysAgo(2), source: "manual", createdAt: isoAgo(2) },
+  { id: "txn_02", userId: "usr_01", accountId: "acc_01", amount: 45_000, type: "expense", category: "makanan", description: "Makan siang Warteg", transactionDate: daysAgo(0), source: "bot", createdAt: isoAgo(0) },
+  { id: "txn_03", userId: "usr_01", accountId: "acc_02", amount: 25_000, type: "expense", category: "transportasi", description: "Grab ke kantor", transactionDate: daysAgo(0), source: "bot", createdAt: isoAgo(0) },
+  { id: "txn_04", userId: "usr_01", accountId: "acc_01", amount: 350_000, type: "expense", category: "belanja", description: "Beli baju di Uniqlo", transactionDate: daysAgo(1), source: "manual", createdAt: isoAgo(1) },
+  { id: "txn_05", userId: "usr_01", accountId: "acc_02", amount: 80_000, type: "expense", category: "makanan", description: "Kopi dan snack", transactionDate: daysAgo(1), source: "bot", createdAt: isoAgo(1) },
+  { id: "txn_06", userId: "usr_01", accountId: "acc_01", amount: 500_000, type: "expense", category: "tagihan", description: "Tagihan listrik PLN", transactionDate: daysAgo(3), source: "manual", createdAt: isoAgo(3) },
+  { id: "txn_07", userId: "usr_01", accountId: "acc_01", amount: 150_000, type: "expense", category: "tagihan", description: "Paket internet Telkomsel", transactionDate: daysAgo(3), source: "manual", createdAt: isoAgo(3) },
+  { id: "txn_08", userId: "usr_01", accountId: "acc_02", amount: 30_000, type: "expense", category: "transportasi", description: "Parkir mall", transactionDate: daysAgo(4), source: "manual", createdAt: isoAgo(4) },
+  { id: "txn_09", userId: "usr_01", accountId: "acc_01", amount: 200_000, type: "expense", category: "hiburan", description: "Nonton bioskop berdua", transactionDate: daysAgo(5), source: "manual", createdAt: isoAgo(5) },
+  { id: "txn_10", userId: "usr_01", accountId: "acc_01", amount: 75_000, type: "expense", category: "makanan", description: "Makan malam restoran", transactionDate: daysAgo(5), source: "bot", createdAt: isoAgo(5) },
+  { id: "txn_11", userId: "usr_01", accountId: "acc_02", amount: 50_000, type: "expense", category: "makanan", description: "Beli sayur pasar", transactionDate: daysAgo(6), source: "bot", createdAt: isoAgo(6) },
+  { id: "txn_12", userId: "usr_01", accountId: "acc_01", amount: 120_000, type: "expense", category: "kesehatan", description: "Beli obat apotek", transactionDate: daysAgo(7), source: "manual", createdAt: isoAgo(7) },
+  { id: "txn_13", userId: "usr_01", accountId: "acc_01", amount: 250_000, type: "expense", category: "belanja", description: "Belanja kebutuhan rumah", transactionDate: daysAgo(8), source: "manual", createdAt: isoAgo(8) },
+  { id: "txn_14", userId: "usr_01", accountId: "acc_02", amount: 35_000, type: "expense", category: "transportasi", description: "GoRide ke pasar", transactionDate: daysAgo(8), source: "bot", createdAt: isoAgo(8) },
+  { id: "txn_15", userId: "usr_01", accountId: "acc_01", amount: 500_000, type: "income", category: "lainnya", description: "Transfer dari teman", transactionDate: daysAgo(10), source: "manual", createdAt: isoAgo(10) },
+  { id: "txn_16", userId: "usr_01", accountId: "acc_01", amount: 180_000, type: "expense", category: "hiburan", description: "Berlangganan Netflix", transactionDate: daysAgo(10), source: "manual", createdAt: isoAgo(10) },
+  { id: "txn_17", userId: "usr_01", accountId: "acc_02", amount: 65_000, type: "expense", category: "makanan", description: "GoFood makan siang", transactionDate: daysAgo(11), source: "bot", createdAt: isoAgo(11) },
+  { id: "txn_18", userId: "usr_01", accountId: "acc_01", amount: 300_000, type: "expense", category: "pendidikan", description: "Buku pemrograman", transactionDate: daysAgo(12), source: "manual", createdAt: isoAgo(12) },
+  { id: "txn_19", userId: "usr_01", accountId: "acc_01", amount: 90_000, type: "expense", category: "transportasi", description: "Bensin motor", transactionDate: daysAgo(13), source: "bot", createdAt: isoAgo(13) },
+  { id: "txn_20", userId: "usr_01", accountId: "acc_02", amount: 40_000, type: "expense", category: "makanan", description: "Jajan bakso", transactionDate: daysAgo(14), source: "bot", createdAt: isoAgo(14) },
+  { id: "txn_21", userId: "usr_01", accountId: "acc_01", amount: 8_200_000, type: "income", category: "gaji", description: "Gaji Bulan Maret", transactionDate: daysAgo(32), source: "manual", createdAt: isoAgo(32) },
+  { id: "txn_22", userId: "usr_01", accountId: "acc_01", amount: 450_000, type: "expense", category: "tagihan", description: "Cicilan kartu kredit", transactionDate: daysAgo(33), source: "manual", createdAt: isoAgo(33) },
+  { id: "txn_23", userId: "usr_01", accountId: "acc_01", amount: 130_000, type: "expense", category: "belanja", description: "Beli peralatan mandi", transactionDate: daysAgo(35), source: "manual", createdAt: isoAgo(35) },
+  { id: "txn_24", userId: "usr_01", accountId: "acc_02", amount: 55_000, type: "expense", category: "makanan", description: "Sarapan nasi uduk", transactionDate: daysAgo(36), source: "bot", createdAt: isoAgo(36) },
+  { id: "txn_25", userId: "usr_01", accountId: "acc_01", amount: 400_000, type: "expense", category: "kesehatan", description: "Periksa dokter gigi", transactionDate: daysAgo(38), source: "manual", createdAt: isoAgo(38) },
+  { id: "txn_26", userId: "usr_01", accountId: "acc_01", amount: 220_000, type: "expense", category: "hiburan", description: "Karaoke dengan teman", transactionDate: daysAgo(40), source: "manual", createdAt: isoAgo(40) },
+  { id: "txn_27", userId: "usr_01", accountId: "acc_02", amount: 70_000, type: "expense", category: "transportasi", description: "Taxi Blue Bird", transactionDate: daysAgo(42), source: "bot", createdAt: isoAgo(42) },
+  { id: "txn_28", userId: "usr_01", accountId: "acc_01", amount: 1_000_000, type: "income", category: "lainnya", description: "Bonus proyek freelance", transactionDate: daysAgo(45), source: "manual", createdAt: isoAgo(45) },
+  { id: "txn_29", userId: "usr_01", accountId: "acc_01", amount: 85_000, type: "expense", category: "makanan", description: "Makan siang bersama tim", transactionDate: daysAgo(48), source: "bot", createdAt: isoAgo(48) },
+  { id: "txn_30", userId: "usr_01", accountId: "acc_01", amount: 600_000, type: "expense", category: "tagihan", description: "Tagihan air PDAM", transactionDate: daysAgo(50), source: "manual", createdAt: isoAgo(50) },
 ]
 
 export const MOCK_SPLIT_BILLS: SplitBill[] = [
