@@ -76,6 +76,17 @@ export const transaction = sqliteTable("transaction", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 })
 
+export const userCategory = sqliteTable("user_category", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  label: text("label").notNull(),
+  color: text("color").notNull().default("#78716c"),
+  icon: text("icon").notNull().default("MoreHorizontal"),
+  position: integer("position").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+})
+
 export const splitBill = sqliteTable("split_bill", {
   id: text("id").primaryKey(),
   transactionId: text("transaction_id").notNull().references(() => transaction.id, { onDelete: "cascade" }),

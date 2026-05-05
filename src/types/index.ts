@@ -25,16 +25,18 @@ export interface Account {
 
 export type TransactionType = "income" | "expense"
 
-export type Category =
-  | "makanan"
-  | "transportasi"
-  | "belanja"
-  | "hiburan"
-  | "tagihan"
-  | "kesehatan"
-  | "pendidikan"
-  | "gaji"
-  | "lainnya"
+export type Category = string
+
+export interface UserCategory {
+  id: string
+  userId: string
+  name: string
+  label: string
+  color: string
+  icon: string
+  position: number
+  createdAt: string
+}
 
 export interface Transaction {
   id: string

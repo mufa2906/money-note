@@ -16,6 +16,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard", label: "Beranda", icon: "LayoutDashboard" },
   { href: "/dashboard/transactions", label: "Transaksi", icon: "ArrowLeftRight" },
   { href: "/dashboard/accounts", label: "Akun", icon: "Wallet" },
+  { href: "/dashboard/categories", label: "Kategori", icon: "Tag" },
   { href: "/dashboard/split-bill", label: "Bagi Tagihan", icon: "Users" },
   { href: "/dashboard/insights", label: "Wawasan AI", icon: "Sparkles" },
   { href: "/dashboard/integrations", label: "Integrasi Bot", icon: "Bot" },

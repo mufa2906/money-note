@@ -16,10 +16,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { AmountInput } from "@/components/common/amount-input"
 import { cn } from "@/lib/utils"
-import { CATEGORIES } from "@/lib/constants"
 import { useToast } from "@/lib/hooks/use-toast"
 import { useAccounts } from "@/lib/hooks/use-accounts"
 import { useTransactions } from "@/lib/hooks/use-transactions"
+import { useCategories } from "@/lib/hooks/use-categories"
 
 const schema = z.object({
   type: z.enum(["income", "expense"]),
@@ -42,6 +42,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
   const { toast } = useToast()
   const { accounts, refetch: refetchAccounts } = useAccounts()
   const { refetch: refetchTransactions } = useTransactions()
+  const { categories } = useCategories()
   const [calOpen, setCalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -132,8 +133,8 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>{c.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
