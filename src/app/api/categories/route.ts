@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { db, dbClient } from "@/lib/db"
 import { userCategory, transaction } from "@/lib/schema"
 import { eq, and, count } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
@@ -16,9 +16,29 @@ const DEFAULT_CATEGORIES = [
   { name: "lainnya", label: "Lainnya", color: "#78716c", icon: "MoreHorizontal", position: 8 },
 ]
 
+// Ensure the user_category table exists. The table was added after the initial
+// schema push, so older deployments may be missing it. CREATE TABLE IF NOT EXISTS
+// is idempotent — safe to run on every request.
+async function ensureTable() {
+  await dbClient.execute(
+    `CREATE TABLE IF NOT EXISTS user_category (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      label TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#78716c',
+      icon TEXT NOT NULL DEFAULT 'MoreHorizontal',
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`
+  )
+}
+
 export async function GET(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
+
+  await ensureTable()
 
   const existing = await db
     .select()
@@ -50,6 +70,8 @@ export async function POST(request: NextRequest) {
   if (!name || !label || !color || !icon) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 })
   }
+
+  await ensureTable()
 
   const existing = await db
     .select()
