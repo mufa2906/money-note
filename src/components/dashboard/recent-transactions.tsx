@@ -9,11 +9,15 @@ import { CurrencyDisplay } from "@/components/common/currency-display"
 import { LoadingSkeleton } from "@/components/common/loading-skeleton"
 import { EmptyState } from "@/components/common/empty-state"
 import { formatDateShort } from "@/lib/utils"
-import { CATEGORY_MAP } from "@/lib/constants"
+import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 import { useTransactions } from "@/lib/hooks/use-transactions"
+import { useCategories } from "@/lib/hooks/use-categories"
+
+const BUILTIN_LABEL = Object.fromEntries(BUILTIN_CATEGORIES.map((c) => [c.name, c.label]))
 
 export function RecentTransactions() {
   const { transactions, loading } = useTransactions(5)
+  const { categories } = useCategories()
 
   return (
     <Card>
@@ -37,7 +41,7 @@ export function RecentTransactions() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{t.description}</p>
                 <p className="text-xs text-muted-foreground">
-                  {CATEGORY_MAP[t.category]?.label} · {formatDateShort(t.transactionDate)}
+                  {categories.find((c) => c.name === t.category)?.label ?? BUILTIN_LABEL[t.category] ?? t.category} · {formatDateShort(t.transactionDate)}
                 </p>
               </div>
               <CurrencyDisplay amount={t.amount} type={t.type} showSign className="text-sm" />
