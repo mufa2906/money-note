@@ -21,6 +21,7 @@ import { useAccounts } from "@/lib/hooks/use-accounts"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { useCategories } from "@/lib/hooks/use-categories"
 import { useNotifications } from "@/lib/hooks/use-notifications"
+import { useSubcategories } from "@/lib/hooks/use-subcategories"
 import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 import type { Transaction } from "@/types"
 
@@ -48,9 +49,11 @@ export function EditTransactionModal({ transaction, open, onOpenChange, onSucces
   const { refetch: refetchTransactions } = useTransactions()
   const { categories: dbCategories } = useCategories()
   const { refetch: refetchNotifications } = useNotifications()
+  const { subcategoriesByCategory } = useSubcategories()
   const categories = dbCategories.length > 0 ? dbCategories : BUILTIN_CATEGORIES
   const [calOpen, setCalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -67,10 +70,13 @@ export function EditTransactionModal({ transaction, open, onOpenChange, onSucces
         description: transaction.description,
         date: new Date(transaction.transactionDate),
       })
+      setSelectedSubcategory(transaction.subcategory ?? null)
     }
   }, [transaction, open, form])
 
   const transactionType = form.watch("type")
+  const selectedCategory = form.watch("category")
+  const subcategoriesForCategory = selectedCategory ? (subcategoriesByCategory[selectedCategory] ?? []) : []
 
   async function onSubmit(data: FormValues) {
     if (!transaction) return
@@ -85,6 +91,7 @@ export function EditTransactionModal({ transaction, open, onOpenChange, onSucces
           amount: Number(data.amount),
           type: data.type,
           category: data.category,
+          subcategory: selectedSubcategory ?? null,
           description: data.description,
           transactionDate: format(data.date, "yyyy-MM-dd"),
         }),
@@ -142,7 +149,7 @@ export function EditTransactionModal({ transaction, open, onOpenChange, onSucces
 
           <div className="space-y-1">
             <Label>Kategori</Label>
-            <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v)}>
+            <Select value={form.watch("category")} onValueChange={(v) => { form.setValue("category", v); setSelectedSubcategory(null) }}>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
@@ -152,6 +159,25 @@ export function EditTransactionModal({ transaction, open, onOpenChange, onSucces
                 ))}
               </SelectContent>
             </Select>
+            {subcategoriesForCategory.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-hide">
+                {subcategoriesForCategory.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedSubcategory(selectedSubcategory === s.name ? null : s.name)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      selectedSubcategory === s.name
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border hover:bg-accent"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">

@@ -38,6 +38,16 @@ export interface UserCategory {
   createdAt: string
 }
 
+export interface UserSubcategory {
+  id: string
+  userId: string
+  categoryName: string
+  name: string
+  label: string
+  position: number
+  createdAt: string
+}
+
 export interface Transaction {
   id: string
   userId: string
@@ -45,6 +55,7 @@ export interface Transaction {
   amount: number
   type: TransactionType
   category: Category
+  subcategory?: string | null
   description: string
   transactionDate: string
   source: "manual" | "bot" | "import"

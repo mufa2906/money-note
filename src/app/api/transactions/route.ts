@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   if (error) return error
 
   const body = await request.json()
-  const { walletAccountId, amount, type, category, description, transactionDate, source = "manual" } = body
+  const { walletAccountId, amount, type, category, subcategory, description, transactionDate, source = "manual" } = body
 
   if (!walletAccountId || !amount || !type || !category || !description || !transactionDate) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   const [created] = await db
     .insert(transaction)
-    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, description, transactionDate, source })
+    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, subcategory: subcategory ?? null, description, transactionDate, source })
     .returning()
 
   const delta = type === "income" ? Number(amount) : -Number(amount)
@@ -124,7 +124,7 @@ export async function PATCH(request: NextRequest) {
   if (error) return error
 
   const body = await request.json()
-  const { id, walletAccountId, amount, type, category, description, transactionDate } = body
+  const { id, walletAccountId, amount, type, category, subcategory, description, transactionDate } = body
 
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
 
@@ -168,6 +168,7 @@ export async function PATCH(request: NextRequest) {
       amount: newAmount,
       type: newType,
       category: category ?? existing.category,
+      subcategory: subcategory !== undefined ? (subcategory || null) : existing.subcategory,
       description: description ?? existing.description,
       transactionDate: transactionDate ?? existing.transactionDate,
     })
