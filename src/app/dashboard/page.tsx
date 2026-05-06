@@ -4,6 +4,7 @@ import { AccountSummary } from "@/components/dashboard/account-summary"
 import { CategorySummary } from "@/components/dashboard/category-summary"
 import { QuickAddFab } from "@/components/dashboard/quick-add-fab"
 import { PremiumActiveCard } from "@/components/dashboard/premium-active-card"
+import { BudgetSummary } from "@/components/dashboard/budget-summary"
 
 export default function DashboardPage() {
   return (
@@ -15,6 +16,7 @@ export default function DashboardPage() {
         </div>
         <BalanceCard />
         <PremiumActiveCard />
+        <BudgetSummary />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <RecentTransactions />
           <div className="space-y-4">

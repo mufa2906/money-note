@@ -20,6 +20,7 @@ import { useToast } from "@/lib/hooks/use-toast"
 import { useAccounts } from "@/lib/hooks/use-accounts"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { useCategories } from "@/lib/hooks/use-categories"
+import { useNotifications } from "@/lib/hooks/use-notifications"
 import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 
 const schema = z.object({
@@ -44,6 +45,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
   const { accounts, refetch: refetchAccounts } = useAccounts()
   const { refetch: refetchTransactions } = useTransactions()
   const { categories: dbCategories } = useCategories()
+  const { refetch: refetchNotifications } = useNotifications()
   const categories = dbCategories.length > 0 ? dbCategories : BUILTIN_CATEGORIES
   const [calOpen, setCalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -80,7 +82,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
       })
       form.reset({ type: "expense", date: new Date() })
       onOpenChange(false)
-      await Promise.all([refetchTransactions(), refetchAccounts()])
+      await Promise.all([refetchTransactions(), refetchAccounts(), refetchNotifications()])
       onSuccess?.()
     } catch (e) {
       toast({ title: "Gagal", description: String(e), variant: "destructive" })
