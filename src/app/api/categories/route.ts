@@ -27,15 +27,16 @@ export async function GET(request: NextRequest) {
     .orderBy(userCategory.position, userCategory.createdAt)
 
   if (existing.length === 0) {
-    await db.insert(userCategory).values(
-      DEFAULT_CATEGORIES.map((c) => ({ id: generateId(), userId: session.user.id, ...c }))
-    )
-    const seeded = await db
-      .select()
-      .from(userCategory)
-      .where(eq(userCategory.userId, session.user.id))
-      .orderBy(userCategory.position)
-    return NextResponse.json(seeded)
+    const now = new Date()
+    const toInsert = DEFAULT_CATEGORIES.map((c) => ({
+      id: generateId(),
+      userId: session.user.id,
+      createdAt: now,
+      ...c,
+    }))
+    await db.insert(userCategory).values(toInsert)
+    // Return the inserted rows directly to avoid Turso read-replica lag
+    return NextResponse.json(toInsert.map((r) => ({ ...r, createdAt: r.createdAt.getTime() })))
   }
 
   return NextResponse.json(existing)
