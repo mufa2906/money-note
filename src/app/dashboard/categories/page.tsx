@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Plus, Tag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CategoryCard } from "@/components/categories/category-card"
@@ -14,13 +14,6 @@ export default function CategoriesPage() {
   const { categories, loading, refetch } = useCategories()
   const [addOpen, setAddOpen] = useState(false)
   const [editCategory, setEditCategory] = useState<UserCategory | null>(null)
-
-  // Trigger seeding for users who have never had categories set up
-  useEffect(() => {
-    if (!loading && categories.length === 0) {
-      refetch()
-    }
-  }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
