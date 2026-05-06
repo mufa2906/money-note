@@ -45,6 +45,18 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+// Fallback for the 9 built-in categories so icons show even before DB loads
+const BUILTIN_ICON: Record<string, string> = {
+  makanan: "UtensilsCrossed", transportasi: "Car", belanja: "ShoppingBag",
+  hiburan: "Music", tagihan: "FileText", kesehatan: "Heart",
+  pendidikan: "BookOpen", gaji: "Briefcase", lainnya: "MoreHorizontal",
+}
+const BUILTIN_COLOR: Record<string, string> = {
+  makanan: "#f97316", transportasi: "#3b82f6", belanja: "#a855f7",
+  hiburan: "#ec4899", tagihan: "#ef4444", kesehatan: "#22c55e",
+  pendidikan: "#06b6d4", gaji: "#84cc16", lainnya: "#78716c",
+}
+
 interface CategoryIconProps {
   category: string
   className?: string
@@ -55,8 +67,8 @@ export function CategoryIcon({ category, className, size = "md" }: CategoryIconP
   const { categories } = useCategories()
 
   const cat = categories.find((c) => c.name === category)
-  const iconName = cat?.icon ?? "MoreHorizontal"
-  const color = cat?.color ?? "#78716c"
+  const iconName = cat?.icon ?? BUILTIN_ICON[category] ?? "MoreHorizontal"
+  const color = cat?.color ?? BUILTIN_COLOR[category] ?? "#78716c"
 
   const Icon = ICON_MAP[iconName] ?? MoreHorizontal
   const sizeClass = size === "sm" ? "h-7 w-7" : size === "lg" ? "h-12 w-12" : "h-9 w-9"

@@ -8,10 +8,10 @@ import { CategoryIcon } from "@/components/common/category-icon"
 import { CurrencyDisplay } from "@/components/common/currency-display"
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { formatDate } from "@/lib/utils"
-import { CATEGORY_MAP } from "@/lib/constants"
 import { useToast } from "@/lib/hooks/use-toast"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { useAccounts } from "@/lib/hooks/use-accounts"
+import { useCategories } from "@/lib/hooks/use-categories"
 import type { Transaction } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -22,8 +22,15 @@ interface TransactionCardProps {
   hideDate?: boolean
 }
 
+const BUILTIN_LABEL: Record<string, string> = {
+  makanan: "Makanan", transportasi: "Transportasi", belanja: "Belanja",
+  hiburan: "Hiburan", tagihan: "Tagihan", kesehatan: "Kesehatan",
+  pendidikan: "Pendidikan", gaji: "Gaji", lainnya: "Lainnya",
+}
+
 export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }: TransactionCardProps) {
-  const cat = CATEGORY_MAP[t.category]
+  const { categories } = useCategories()
+  const catLabel = categories.find((c) => c.name === t.category)?.label ?? BUILTIN_LABEL[t.category] ?? t.category
   const { toast } = useToast()
   const { refetch: refetchTransactions } = useTransactions()
   const { refetch: refetchAccounts } = useAccounts()
@@ -48,7 +55,7 @@ export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }:
         <p className="text-sm font-medium truncate">{t.description}</p>
         <div className="flex items-center gap-2 mt-0.5">
           {!hideDate && <span className="text-xs text-muted-foreground">{formatDate(t.transactionDate)}</span>}
-          <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4">{cat?.label}</Badge>
+          <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4">{catLabel}</Badge>
           {t.source === "bot" && (
             <Badge variant="outline" className="text-xs py-0 px-1.5 h-4">Bot</Badge>
           )}

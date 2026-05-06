@@ -15,10 +15,10 @@ const FREE_FEATURES = [
   { label: "Input manual transaksi", included: true },
   { label: "Notifikasi push standar", included: true },
   { label: "Bagi tagihan dasar", included: true },
-  { label: "Wawasan AI dasar (3 kategori)", included: true },
+  { label: "Wawasan dasar (3 kategori)", included: true },
   { label: "WhatsApp Bot", included: false },
-  { label: "Wawasan AI lengkap (semua kategori)", included: false },
-  { label: "Saran AI mendalam", included: false },
+  { label: "Wawasan lengkap (semua kategori)", included: false },
+  { label: "Analisis tren mendalam", included: false },
 ]
 
 const PREMIUM_FEATURES = FREE_FEATURES.map((f) => ({ ...f, included: true }))

@@ -10,7 +10,7 @@ import {
 
 const FEATURES = [
   { icon: Bot, title: "Telegram & WhatsApp Bot", desc: "Catat transaksi hanya dengan mengirim pesan chat, AI langsung mengkategorikan secara otomatis." },
-  { icon: Sparkles, title: "Wawasan AI", desc: "Analisis pola pengeluaran, saran hemat personal, dan peringatan anggaran berbasis data." },
+  { icon: Sparkles, title: "Wawasan", desc: "Analisis pola pengeluaran, ringkasan keuangan bulanan, dan insight tren berbasis data transaksimu." },
   { icon: Bell, title: "Notifikasi Push", desc: "Pengingat tagihan dan alert anggaran langsung di browser tanpa perlu membuka aplikasi." },
   { icon: WifiOff, title: "Mode Offline", desc: "Catat transaksi tanpa internet. Data otomatis tersinkronisasi saat koneksi pulih." },
   { icon: FileSpreadsheet, title: "Import Excel/CSV", desc: "Impor riwayat transaksi dari file Excel atau CSV dengan mudah." },

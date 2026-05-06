@@ -18,8 +18,8 @@ const PERKS = [
   },
   {
     icon: Sparkles,
-    title: "Wawasan AI Lengkap",
-    description: "Lihat semua kategori & saran mendalam.",
+    title: "Wawasan Lengkap",
+    description: "Lihat semua kategori & analisis tren mendalam.",
     href: "/dashboard/insights",
     cta: "Buka Insights",
   },

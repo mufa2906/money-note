@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  LayoutDashboard, ArrowLeftRight, Wallet, Users, Sparkles,
+  LayoutDashboard, ArrowLeftRight, Wallet, Tag, Users, Sparkles,
   Bot, Bell, Crown, Settings, LogOut, ChevronRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -20,8 +20,9 @@ const NAV = [
   { href: "/dashboard", label: "Beranda", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/transactions", label: "Transaksi", icon: ArrowLeftRight },
   { href: "/dashboard/accounts", label: "Akun", icon: Wallet },
+  { href: "/dashboard/categories", label: "Kategori", icon: Tag },
   { href: "/dashboard/split-bill", label: "Bagi Tagihan", icon: Users },
-  { href: "/dashboard/insights", label: "Wawasan AI", icon: Sparkles },
+  { href: "/dashboard/insights", label: "Wawasan", icon: Sparkles },
   { href: "/dashboard/integrations", label: "Integrasi Bot", icon: Bot },
   { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
   { href: "/dashboard/upgrade", label: "Upgrade", icon: Crown },
