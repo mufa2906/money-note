@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Tag } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Plus, Tag, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CategoryCard } from "@/components/categories/category-card"
 import { CategoryModal } from "@/components/categories/category-modal"
@@ -14,6 +14,17 @@ export default function CategoriesPage() {
   const { categories, loading, refetch } = useCategories()
   const [addOpen, setAddOpen] = useState(false)
   const [editCategory, setEditCategory] = useState<UserCategory | null>(null)
+  const autoRetried = useRef(false)
+
+  // One-shot auto-retry for users whose categories haven't been seeded yet.
+  // The API seeds default categories when the table is empty, but a transient
+  // error during the initial DataProvider fetch can leave categories empty.
+  useEffect(() => {
+    if (!loading && categories.length === 0 && !autoRetried.current) {
+      autoRetried.current = true
+      refetch()
+    }
+  }, [loading, categories.length, refetch])
 
   return (
     <>
@@ -35,7 +46,16 @@ export default function CategoriesPage() {
             icon={Tag}
             title="Belum ada kategori"
             description="Tambahkan kategori untuk mengorganisir transaksimu."
-            action={<Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-4 w-4 mr-1" />Tambah Kategori</Button>}
+            action={
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={refetch}>
+                  <RefreshCw className="h-4 w-4 mr-1" />Muat Ulang
+                </Button>
+                <Button size="sm" onClick={() => setAddOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" />Tambah Kategori
+                </Button>
+              </div>
+            }
           />
         ) : (
           <div className="space-y-2">
