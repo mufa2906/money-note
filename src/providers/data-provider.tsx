@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useMemo, type ReactNode } from "react"
 import { useAuth } from "@/providers/auth-provider"
-import type { Account, Transaction, Category, UserCategory } from "@/types"
+import type { Account, Transaction, Category, UserCategory, AppNotification, NotificationKind } from "@/types"
 
 interface AccountsContextValue {
   accounts: Account[]
@@ -25,9 +25,18 @@ interface CategoriesContextValue {
   refetch: () => Promise<void>
 }
 
+interface NotificationsContextValue {
+  notifications: AppNotification[]
+  loading: boolean
+  unreadCount: number
+  refetch: () => Promise<void>
+  markAllRead: () => Promise<void>
+}
+
 const AccountsContext = createContext<AccountsContextValue | null>(null)
 const TransactionsContext = createContext<TransactionsContextValue | null>(null)
 const CategoriesContext = createContext<CategoriesContextValue | null>(null)
+const NotificationsContext = createContext<NotificationsContextValue | null>(null)
 
 function mapTransactionRow(row: Record<string, unknown>): Transaction {
   return {
@@ -57,6 +66,18 @@ function mapCategoryRow(row: Record<string, unknown>): UserCategory {
   }
 }
 
+function mapNotificationRow(row: Record<string, unknown>): AppNotification {
+  return {
+    id: row.id as string,
+    userId: row.userId as string,
+    kind: row.kind as NotificationKind,
+    title: row.title as string,
+    body: row.body as string,
+    isRead: row.isRead as boolean,
+    createdAt: row.createdAt ? new Date(row.createdAt as string | number).toISOString() : new Date().toISOString(),
+  }
+}
+
 export function DataProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
 
@@ -71,6 +92,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<UserCategory[]>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [categoriesError, setCategoriesError] = useState<string | null>(null)
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(true)
 
   const fetchAccounts = useCallback(async () => {
     setAccountsLoading(true)
@@ -127,21 +151,49 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const fetchNotifications = useCallback(async () => {
+    setNotificationsLoading(true)
+    try {
+      const res = await fetch("/api/notifications", { cache: "no-store" })
+      if (!res.ok) return
+      const data = await res.json()
+      setNotifications(data.map(mapNotificationRow))
+    } catch {
+      // ignore
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }, [])
+
+  const markAllRead = useCallback(async () => {
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+  }, [])
+
   useEffect(() => {
     if (isLoading) return
     if (!isAuthenticated) {
       setAccounts([])
       setTransactions([])
       setCategories([])
+      setNotifications([])
       setAccountsLoading(false)
       setTransactionsLoading(false)
       setCategoriesLoading(false)
+      setNotificationsLoading(false)
       return
     }
     fetchAccounts()
     fetchTransactions()
     fetchCategories()
-  }, [isAuthenticated, isLoading, fetchAccounts, fetchTransactions, fetchCategories])
+    fetchNotifications()
+  }, [isAuthenticated, isLoading, fetchAccounts, fetchTransactions, fetchCategories, fetchNotifications])
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications])
 
   const accountsValue = useMemo<AccountsContextValue>(
     () => ({ accounts, loading: accountsLoading, error: accountsError, refetch: fetchAccounts }),
@@ -158,11 +210,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [categories, categoriesLoading, categoriesError, fetchCategories],
   )
 
+  const notificationsValue = useMemo<NotificationsContextValue>(
+    () => ({ notifications, loading: notificationsLoading, unreadCount, refetch: fetchNotifications, markAllRead }),
+    [notifications, notificationsLoading, unreadCount, fetchNotifications, markAllRead],
+  )
+
   return (
     <AccountsContext.Provider value={accountsValue}>
       <TransactionsContext.Provider value={transactionsValue}>
         <CategoriesContext.Provider value={categoriesValue}>
-          {children}
+          <NotificationsContext.Provider value={notificationsValue}>
+            {children}
+          </NotificationsContext.Provider>
         </CategoriesContext.Provider>
       </TransactionsContext.Provider>
     </AccountsContext.Provider>
@@ -184,5 +243,11 @@ export function useTransactionsContext(): TransactionsContextValue {
 export function useCategoriesContext(): CategoriesContextValue {
   const ctx = useContext(CategoriesContext)
   if (!ctx) throw new Error("useCategoriesContext must be used within DataProvider")
+  return ctx
+}
+
+export function useNotificationsContext(): NotificationsContextValue {
+  const ctx = useContext(NotificationsContext)
+  if (!ctx) throw new Error("useNotificationsContext must be used within DataProvider")
   return ctx
 }

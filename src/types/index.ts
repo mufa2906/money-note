@@ -123,6 +123,15 @@ export interface ParticipantBreakdown {
   lineItems: { name: string; qty: number; share: number }[]
 }
 
+export interface Budget {
+  id: string
+  userId: string
+  category: Category
+  amount: number
+  createdAt: string
+  updatedAt: string
+}
+
 export type NotificationKind =
   | "transaction_added"
   | "budget_warning"

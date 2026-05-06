@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard, ArrowLeftRight, Wallet, Tag, Users, Sparkles,
-  Bot, Bell, Crown, Settings, LogOut, ChevronRight,
+  Bot, Bell, Crown, Settings, LogOut, ChevronRight, PiggyBank,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/providers/auth-provider"
@@ -22,6 +22,7 @@ const NAV = [
   { href: "/dashboard/accounts", label: "Akun", icon: Wallet },
   { href: "/dashboard/categories", label: "Kategori", icon: Tag },
   { href: "/dashboard/split-bill", label: "Bagi Tagihan", icon: Users },
+  { href: "/dashboard/budget", label: "Budget", icon: PiggyBank },
   { href: "/dashboard/insights", label: "Wawasan", icon: Sparkles },
   { href: "/dashboard/integrations", label: "Integrasi Bot", icon: Bot },
   { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
