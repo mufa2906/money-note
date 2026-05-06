@@ -1,6 +1,7 @@
 import { BalanceCard } from "@/components/dashboard/balance-card"
 import { RecentTransactions } from "@/components/dashboard/recent-transactions"
 import { AccountSummary } from "@/components/dashboard/account-summary"
+import { CategorySummary } from "@/components/dashboard/category-summary"
 import { QuickAddFab } from "@/components/dashboard/quick-add-fab"
 import { PremiumActiveCard } from "@/components/dashboard/premium-active-card"
 
@@ -18,6 +19,7 @@ export default function DashboardPage() {
           <RecentTransactions />
           <AccountSummary />
         </div>
+        <CategorySummary />
       </div>
       <QuickAddFab />
     </>

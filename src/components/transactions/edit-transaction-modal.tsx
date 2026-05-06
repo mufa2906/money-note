@@ -20,6 +20,7 @@ import { useToast } from "@/lib/hooks/use-toast"
 import { useAccounts } from "@/lib/hooks/use-accounts"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { useCategories } from "@/lib/hooks/use-categories"
+import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 import type { Transaction } from "@/types"
 
 const schema = z.object({
@@ -44,7 +45,8 @@ export function EditTransactionModal({ transaction, open, onOpenChange, onSucces
   const { toast } = useToast()
   const { accounts, refetch: refetchAccounts } = useAccounts()
   const { refetch: refetchTransactions } = useTransactions()
-  const { categories } = useCategories()
+  const { categories: dbCategories } = useCategories()
+  const categories = dbCategories.length > 0 ? dbCategories : BUILTIN_CATEGORIES
   const [calOpen, setCalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -144,7 +146,7 @@ export function EditTransactionModal({ transaction, open, onOpenChange, onSucces
               </SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.name}>{c.label}</SelectItem>
+                  <SelectItem key={c.name} value={c.name}>{c.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -45,17 +45,20 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-// Fallback for the 9 built-in categories so icons show even before DB loads
-const BUILTIN_ICON: Record<string, string> = {
-  makanan: "UtensilsCrossed", transportasi: "Car", belanja: "ShoppingBag",
-  hiburan: "Music", tagihan: "FileText", kesehatan: "Heart",
-  pendidikan: "BookOpen", gaji: "Briefcase", lainnya: "MoreHorizontal",
-}
-const BUILTIN_COLOR: Record<string, string> = {
-  makanan: "#f97316", transportasi: "#3b82f6", belanja: "#a855f7",
-  hiburan: "#ec4899", tagihan: "#ef4444", kesehatan: "#22c55e",
-  pendidikan: "#06b6d4", gaji: "#84cc16", lainnya: "#78716c",
-}
+export const BUILTIN_CATEGORIES: { name: string; label: string; icon: string; color: string }[] = [
+  { name: "makanan",      label: "Makanan",       icon: "UtensilsCrossed", color: "#f97316" },
+  { name: "transportasi", label: "Transportasi",  icon: "Car",             color: "#3b82f6" },
+  { name: "belanja",      label: "Belanja",       icon: "ShoppingBag",     color: "#a855f7" },
+  { name: "hiburan",      label: "Hiburan",       icon: "Music",           color: "#ec4899" },
+  { name: "tagihan",      label: "Tagihan",       icon: "FileText",        color: "#ef4444" },
+  { name: "kesehatan",    label: "Kesehatan",     icon: "Heart",           color: "#22c55e" },
+  { name: "pendidikan",   label: "Pendidikan",    icon: "BookOpen",        color: "#06b6d4" },
+  { name: "gaji",         label: "Gaji",          icon: "Briefcase",       color: "#84cc16" },
+  { name: "lainnya",      label: "Lainnya",       icon: "MoreHorizontal",  color: "#78716c" },
+]
+
+const BUILTIN_ICON = Object.fromEntries(BUILTIN_CATEGORIES.map((c) => [c.name, c.icon]))
+const BUILTIN_COLOR = Object.fromEntries(BUILTIN_CATEGORIES.map((c) => [c.name, c.color]))
 
 interface CategoryIconProps {
   category: string

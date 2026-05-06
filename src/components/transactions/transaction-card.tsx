@@ -12,6 +12,7 @@ import { useToast } from "@/lib/hooks/use-toast"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { useAccounts } from "@/lib/hooks/use-accounts"
 import { useCategories } from "@/lib/hooks/use-categories"
+import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 import type { Transaction } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -22,11 +23,7 @@ interface TransactionCardProps {
   hideDate?: boolean
 }
 
-const BUILTIN_LABEL: Record<string, string> = {
-  makanan: "Makanan", transportasi: "Transportasi", belanja: "Belanja",
-  hiburan: "Hiburan", tagihan: "Tagihan", kesehatan: "Kesehatan",
-  pendidikan: "Pendidikan", gaji: "Gaji", lainnya: "Lainnya",
-}
+const BUILTIN_LABEL = Object.fromEntries(BUILTIN_CATEGORIES.map((c) => [c.name, c.label]))
 
 export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }: TransactionCardProps) {
   const { categories } = useCategories()
