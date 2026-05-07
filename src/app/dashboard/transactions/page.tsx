@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Search, Plus, ArrowLeftRight, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { format } from "date-fns"
@@ -26,7 +26,7 @@ function getMonthKey(year: number, month: number) {
   return `${year}-${String(month + 1).padStart(2, "0")}`
 }
 
-export default function TransactionsPage() {
+function TransactionsPageInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { transactions, loading, refetch } = useTransactions()
@@ -295,5 +295,13 @@ export default function TransactionsPage() {
         onSuccess={refetch}
       />
     </>
+  )
+}
+
+export default function TransactionsPage() {
+  return (
+    <Suspense>
+      <TransactionsPageInner />
+    </Suspense>
   )
 }
