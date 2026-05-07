@@ -12,6 +12,7 @@ import { useToast } from "@/lib/hooks/use-toast"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { useAccounts } from "@/lib/hooks/use-accounts"
 import { useCategories } from "@/lib/hooks/use-categories"
+import { useSubcategories } from "@/lib/hooks/use-subcategories"
 import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 import type { Transaction } from "@/types"
 import { cn } from "@/lib/utils"
@@ -27,7 +28,11 @@ const BUILTIN_LABEL = Object.fromEntries(BUILTIN_CATEGORIES.map((c) => [c.name, 
 
 export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }: TransactionCardProps) {
   const { categories } = useCategories()
+  const { subcategoriesByCategory } = useSubcategories()
   const catLabel = categories.find((c) => c.name === t.category)?.label ?? BUILTIN_LABEL[t.category] ?? t.category
+  const subcatLabel = t.subcategory && t.subcategory !== "dll"
+    ? (subcategoriesByCategory[t.category]?.find((s) => s.name === t.subcategory)?.label ?? null)
+    : null
   const { toast } = useToast()
   const { refetch: refetchTransactions } = useTransactions()
   const { refetch: refetchAccounts } = useAccounts()
@@ -52,7 +57,9 @@ export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }:
         <p className="text-sm font-medium truncate">{t.description}</p>
         <div className="flex items-center gap-2 mt-0.5">
           {!hideDate && <span className="text-xs text-muted-foreground">{formatDate(t.transactionDate)}</span>}
-          <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4">{catLabel}</Badge>
+          <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4">
+            {subcatLabel ? `${catLabel} · ${subcatLabel}` : catLabel}
+          </Badge>
           {t.source === "bot" && (
             <Badge variant="outline" className="text-xs py-0 px-1.5 h-4">Bot</Badge>
           )}

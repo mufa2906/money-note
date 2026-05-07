@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useMemo, type ReactNode } from "react"
 import { useAuth } from "@/providers/auth-provider"
-import type { Account, Transaction, Category, UserCategory, AppNotification, NotificationKind } from "@/types"
+import type { Account, Transaction, Category, UserCategory, UserSubcategory, AppNotification, NotificationKind } from "@/types"
 
 interface AccountsContextValue {
   accounts: Account[]
@@ -33,10 +33,18 @@ interface NotificationsContextValue {
   markAllRead: () => Promise<void>
 }
 
+interface SubcategoriesContextValue {
+  subcategories: UserSubcategory[]
+  subcategoriesByCategory: Record<string, UserSubcategory[]>
+  loading: boolean
+  refetch: () => Promise<void>
+}
+
 const AccountsContext = createContext<AccountsContextValue | null>(null)
 const TransactionsContext = createContext<TransactionsContextValue | null>(null)
 const CategoriesContext = createContext<CategoriesContextValue | null>(null)
 const NotificationsContext = createContext<NotificationsContextValue | null>(null)
+const SubcategoriesContext = createContext<SubcategoriesContextValue | null>(null)
 
 function mapTransactionRow(row: Record<string, unknown>): Transaction {
   return {
@@ -46,9 +54,22 @@ function mapTransactionRow(row: Record<string, unknown>): Transaction {
     amount: row.amount as number,
     type: row.type as "income" | "expense",
     category: row.category as Category,
+    subcategory: (row.subcategory as string | null | undefined) ?? null,
     description: row.description as string,
     transactionDate: row.transactionDate as string,
     source: row.source as "manual" | "bot" | "import",
+    createdAt: row.createdAt ? String(row.createdAt) : new Date().toISOString(),
+  }
+}
+
+function mapSubcategoryRow(row: Record<string, unknown>): UserSubcategory {
+  return {
+    id: row.id as string,
+    userId: row.userId as string,
+    categoryName: row.categoryName as string,
+    name: row.name as string,
+    label: row.label as string,
+    position: row.position as number,
     createdAt: row.createdAt ? String(row.createdAt) : new Date().toISOString(),
   }
 }
@@ -95,6 +116,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(true)
+
+  const [subcategories, setSubcategories] = useState<UserSubcategory[]>([])
+  const [subcategoriesLoading, setSubcategoriesLoading] = useState(true)
 
   const fetchAccounts = useCallback(async () => {
     setAccountsLoading(true)
@@ -165,6 +189,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const fetchSubcategories = useCallback(async () => {
+    setSubcategoriesLoading(true)
+    try {
+      const res = await fetch("/api/subcategories", { cache: "no-store" })
+      if (!res.ok) return
+      const data = await res.json()
+      setSubcategories(data.map(mapSubcategoryRow))
+    } catch {
+      // ignore
+    } finally {
+      setSubcategoriesLoading(false)
+    }
+  }, [])
+
   const markAllRead = useCallback(async () => {
     await fetch("/api/notifications", {
       method: "PATCH",
@@ -181,17 +219,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setTransactions([])
       setCategories([])
       setNotifications([])
+      setSubcategories([])
       setAccountsLoading(false)
       setTransactionsLoading(false)
       setCategoriesLoading(false)
       setNotificationsLoading(false)
+      setSubcategoriesLoading(false)
       return
     }
     fetchAccounts()
     fetchTransactions()
     fetchCategories()
     fetchNotifications()
-  }, [isAuthenticated, isLoading, fetchAccounts, fetchTransactions, fetchCategories, fetchNotifications])
+    fetchSubcategories()
+  }, [isAuthenticated, isLoading, fetchAccounts, fetchTransactions, fetchCategories, fetchNotifications, fetchSubcategories])
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications])
 
@@ -215,12 +256,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [notifications, notificationsLoading, unreadCount, fetchNotifications, markAllRead],
   )
 
+  const subcategoriesByCategory = useMemo<Record<string, UserSubcategory[]>>(() => {
+    const map: Record<string, UserSubcategory[]> = {}
+    for (const s of subcategories) {
+      if (!map[s.categoryName]) map[s.categoryName] = []
+      map[s.categoryName].push(s)
+    }
+    return map
+  }, [subcategories])
+
+  const subcategoriesValue = useMemo<SubcategoriesContextValue>(
+    () => ({ subcategories, subcategoriesByCategory, loading: subcategoriesLoading, refetch: fetchSubcategories }),
+    [subcategories, subcategoriesByCategory, subcategoriesLoading, fetchSubcategories],
+  )
+
   return (
     <AccountsContext.Provider value={accountsValue}>
       <TransactionsContext.Provider value={transactionsValue}>
         <CategoriesContext.Provider value={categoriesValue}>
           <NotificationsContext.Provider value={notificationsValue}>
-            {children}
+            <SubcategoriesContext.Provider value={subcategoriesValue}>
+              {children}
+            </SubcategoriesContext.Provider>
           </NotificationsContext.Provider>
         </CategoriesContext.Provider>
       </TransactionsContext.Provider>
@@ -249,5 +306,11 @@ export function useCategoriesContext(): CategoriesContextValue {
 export function useNotificationsContext(): NotificationsContextValue {
   const ctx = useContext(NotificationsContext)
   if (!ctx) throw new Error("useNotificationsContext must be used within DataProvider")
+  return ctx
+}
+
+export function useSubcategoriesContext(): SubcategoriesContextValue {
+  const ctx = useContext(SubcategoriesContext)
+  if (!ctx) throw new Error("useSubcategoriesContext must be used within DataProvider")
   return ctx
 }

@@ -21,6 +21,7 @@ import { useAccounts } from "@/lib/hooks/use-accounts"
 import { useTransactions } from "@/lib/hooks/use-transactions"
 import { useCategories } from "@/lib/hooks/use-categories"
 import { useNotifications } from "@/lib/hooks/use-notifications"
+import { useSubcategories } from "@/lib/hooks/use-subcategories"
 import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 
 const schema = z.object({
@@ -46,9 +47,11 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
   const { refetch: refetchTransactions } = useTransactions()
   const { categories: dbCategories } = useCategories()
   const { refetch: refetchNotifications } = useNotifications()
+  const { subcategoriesByCategory } = useSubcategories()
   const categories = dbCategories.length > 0 ? dbCategories : BUILTIN_CATEGORIES
   const [calOpen, setCalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -56,6 +59,8 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
   })
 
   const transactionType = form.watch("type")
+  const selectedCategory = form.watch("category")
+  const subcategoriesForCategory = selectedCategory ? (subcategoriesByCategory[selectedCategory] ?? []) : []
 
   async function onSubmit(data: FormValues) {
     setSubmitting(true)
@@ -68,6 +73,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
           amount: Number(data.amount),
           type: data.type,
           category: data.category,
+          subcategory: selectedSubcategory ?? null,
           description: data.description,
           transactionDate: format(data.date, "yyyy-MM-dd"),
           source: "manual",
@@ -81,6 +87,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
         description: `${data.description} berhasil disimpan.`,
       })
       form.reset({ type: "expense", date: new Date() })
+      setSelectedSubcategory(null)
       onOpenChange(false)
       await Promise.all([refetchTransactions(), refetchAccounts(), refetchNotifications()])
       onSuccess?.()
@@ -132,7 +139,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
 
           <div className="space-y-1">
             <Label>Kategori</Label>
-            <Select onValueChange={(v) => form.setValue("category", v)}>
+            <Select onValueChange={(v) => { form.setValue("category", v); setSelectedSubcategory(null) }}>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
@@ -142,6 +149,25 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
                 ))}
               </SelectContent>
             </Select>
+            {subcategoriesForCategory.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-hide">
+                {subcategoriesForCategory.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedSubcategory(selectedSubcategory === s.name ? null : s.name)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      selectedSubcategory === s.name
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border hover:bg-accent"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">

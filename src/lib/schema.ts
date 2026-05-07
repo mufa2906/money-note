@@ -70,6 +70,7 @@ export const transaction = sqliteTable("transaction", {
   amount: real("amount").notNull(),
   type: text("type", { enum: ["income", "expense"] }).notNull(),
   category: text("category").notNull(),
+  subcategory: text("subcategory"),
   description: text("description").notNull(),
   transactionDate: text("transaction_date").notNull(),
   source: text("source", { enum: ["manual", "bot", "import"] }).notNull().default("manual"),
@@ -83,6 +84,16 @@ export const userCategory = sqliteTable("user_category", {
   label: text("label").notNull(),
   color: text("color").notNull().default("#78716c"),
   icon: text("icon").notNull().default("MoreHorizontal"),
+  position: integer("position").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+})
+
+export const userSubcategory = sqliteTable("user_subcategory", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  categoryName: text("category_name").notNull(),
+  name: text("name").notNull(),
+  label: text("label").notNull(),
   position: integer("position").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 })
@@ -157,6 +168,7 @@ export const budget = sqliteTable("budget", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   category: text("category").notNull(),
+  subcategory: text("subcategory"),
   amount: real("amount").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { db, dbClient } from "@/lib/db"
 import { transaction, walletAccount, notification, budget } from "@/lib/schema"
 import { eq, and, desc, sql, like, sum } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
@@ -16,9 +16,19 @@ const CATEGORY_LABELS: Record<string, string> = {
   lainnya: "Lainnya",
 }
 
+let migrated = false
+async function ensureMigrations() {
+  if (migrated) return
+  // Add subcategory column to transaction if it doesn't exist yet
+  await dbClient.execute(`ALTER TABLE "transaction" ADD COLUMN subcategory TEXT`).catch(() => {})
+  migrated = true
+}
+
 export async function GET(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
+
+  await ensureMigrations()
 
   const { searchParams } = new URL(request.url)
   const limit = Number(searchParams.get("limit") ?? 500)
@@ -37,8 +47,10 @@ export async function POST(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
 
+  await ensureMigrations()
+
   const body = await request.json()
-  const { walletAccountId, amount, type, category, description, transactionDate, source = "manual" } = body
+  const { walletAccountId, amount, type, category, subcategory, description, transactionDate, source = "manual" } = body
 
   if (!walletAccountId || !amount || !type || !category || !description || !transactionDate) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -46,7 +58,7 @@ export async function POST(request: NextRequest) {
 
   const [created] = await db
     .insert(transaction)
-    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, description, transactionDate, source })
+    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, subcategory: subcategory ?? null, description, transactionDate, source })
     .returning()
 
   const delta = type === "income" ? Number(amount) : -Number(amount)
@@ -123,8 +135,10 @@ export async function PATCH(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
 
+  await ensureMigrations()
+
   const body = await request.json()
-  const { id, walletAccountId, amount, type, category, description, transactionDate } = body
+  const { id, walletAccountId, amount, type, category, subcategory, description, transactionDate } = body
 
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
 
@@ -168,6 +182,7 @@ export async function PATCH(request: NextRequest) {
       amount: newAmount,
       type: newType,
       category: category ?? existing.category,
+      subcategory: subcategory !== undefined ? (subcategory || null) : existing.subcategory,
       description: description ?? existing.description,
       transactionDate: transactionDate ?? existing.transactionDate,
     })
