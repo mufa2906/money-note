@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { db, dbClient } from "@/lib/db"
 import { budget } from "@/lib/schema"
 import { eq, and, isNull } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
 
+let migrated = false
+async function ensureMigrations() {
+  if (migrated) return
+  await dbClient.execute(`ALTER TABLE budget ADD COLUMN subcategory TEXT`).catch(() => {})
+  migrated = true
+}
+
 export async function GET(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
+
+  await ensureMigrations()
 
   const rows = await db
     .select()
@@ -19,6 +28,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
+
+  await ensureMigrations()
 
   const body = await request.json()
   const { category, subcategory, amount } = body

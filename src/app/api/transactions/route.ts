@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { db, dbClient } from "@/lib/db"
 import { transaction, walletAccount, notification, budget } from "@/lib/schema"
 import { eq, and, desc, sql, like, sum } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
@@ -16,9 +16,19 @@ const CATEGORY_LABELS: Record<string, string> = {
   lainnya: "Lainnya",
 }
 
+let migrated = false
+async function ensureMigrations() {
+  if (migrated) return
+  // Add subcategory column to transaction if it doesn't exist yet
+  await dbClient.execute(`ALTER TABLE "transaction" ADD COLUMN subcategory TEXT`).catch(() => {})
+  migrated = true
+}
+
 export async function GET(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
+
+  await ensureMigrations()
 
   const { searchParams } = new URL(request.url)
   const limit = Number(searchParams.get("limit") ?? 500)
@@ -36,6 +46,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
+
+  await ensureMigrations()
 
   const body = await request.json()
   const { walletAccountId, amount, type, category, subcategory, description, transactionDate, source = "manual" } = body
@@ -122,6 +134,8 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const { session, error } = await requireAuth(request)
   if (error) return error
+
+  await ensureMigrations()
 
   const body = await request.json()
   const { id, walletAccountId, amount, type, category, subcategory, description, transactionDate } = body
