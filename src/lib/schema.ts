@@ -168,6 +168,7 @@ export const budget = sqliteTable("budget", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   category: text("category").notNull(),
+  subcategory: text("subcategory"),
   amount: real("amount").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),

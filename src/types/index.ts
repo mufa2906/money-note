@@ -138,6 +138,7 @@ export interface Budget {
   id: string
   userId: string
   category: Category
+  subcategory: string | null
   amount: number
   createdAt: string
   updatedAt: string

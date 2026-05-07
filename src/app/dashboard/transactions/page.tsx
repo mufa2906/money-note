@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Search, Plus, ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react"
+import { useState, useMemo, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { Search, Plus, ArrowLeftRight, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
 import { Input } from "@/components/ui/input"
@@ -14,8 +15,11 @@ import { EditTransactionModal } from "@/components/transactions/edit-transaction
 import { EmptyState } from "@/components/common/empty-state"
 import { LoadingSkeleton } from "@/components/common/loading-skeleton"
 import { useTransactions } from "@/lib/hooks/use-transactions"
-import { CATEGORIES } from "@/lib/constants"
+import { useCategories } from "@/lib/hooks/use-categories"
+import { useSubcategories } from "@/lib/hooks/use-subcategories"
+import { BUILTIN_CATEGORIES } from "@/components/common/category-icon"
 import { formatCurrency } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import type { Transaction } from "@/types"
 
 function getMonthKey(year: number, month: number) {
@@ -23,9 +27,16 @@ function getMonthKey(year: number, month: number) {
 }
 
 export default function TransactionsPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const { transactions, loading, refetch } = useTransactions()
+  const { categories: dbCategories } = useCategories()
+  const { subcategoriesByCategory } = useSubcategories()
+  const allCategories = dbCategories.length > 0 ? dbCategories : BUILTIN_CATEGORIES
+
   const [search, setSearch] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState<string>("all")
+  const [categoryFilter, setCategoryFilter] = useState<string>(() => searchParams.get("category") ?? "all")
+  const [subcategoryFilter, setSubcategoryFilter] = useState<string>(() => searchParams.get("subcategory") ?? "all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [addOpen, setAddOpen] = useState(false)
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null)
@@ -35,6 +46,34 @@ export default function TransactionsPage() {
     return { year: now.getFullYear(), month: now.getMonth() }
   })
 
+  // Sync URL params → state on first mount
+  useEffect(() => {
+    const cat = searchParams.get("category")
+    const sub = searchParams.get("subcategory")
+    if (cat) setCategoryFilter(cat)
+    if (sub) setSubcategoryFilter(sub)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleCategoryChange(val: string) {
+    setCategoryFilter(val)
+    setSubcategoryFilter("all")
+    const params = new URLSearchParams()
+    if (val !== "all") params.set("category", val)
+    router.replace(`/dashboard/transactions${params.toString() ? `?${params}` : ""}`, { scroll: false })
+  }
+
+  function clearFilters() {
+    setCategoryFilter("all")
+    setSubcategoryFilter("all")
+    router.replace("/dashboard/transactions", { scroll: false })
+  }
+
+  const subcategoriesForFilter = categoryFilter !== "all"
+    ? (subcategoriesByCategory[categoryFilter] ?? [])
+    : []
+
+  const activeCatLabel = allCategories.find((c) => c.name === categoryFilter)?.label
+
   function prevMonth() {
     setSelectedMonth(({ year, month }) =>
       month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 }
@@ -43,8 +82,7 @@ export default function TransactionsPage() {
 
   function nextMonth() {
     const now = new Date()
-    const isCurrentMonth = selectedMonth.year === now.getFullYear() && selectedMonth.month === now.getMonth()
-    if (isCurrentMonth) return
+    if (selectedMonth.year === now.getFullYear() && selectedMonth.month === now.getMonth()) return
     setSelectedMonth(({ year, month }) =>
       month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 }
     )
@@ -69,17 +107,17 @@ export default function TransactionsPage() {
     return monthTransactions.filter((t) => {
       const matchSearch = t.description.toLowerCase().includes(search.toLowerCase())
       const matchCat = categoryFilter === "all" || t.category === categoryFilter
+      const matchSub = subcategoryFilter === "all" || t.subcategory === subcategoryFilter
       const matchType = typeFilter === "all" || t.type === typeFilter
-      return matchSearch && matchCat && matchType
+      return matchSearch && matchCat && matchSub && matchType
     })
-  }, [monthTransactions, search, categoryFilter, typeFilter])
+  }, [monthTransactions, search, categoryFilter, subcategoryFilter, typeFilter])
 
   const grouped = useMemo(() => {
     const map = new Map<string, Transaction[]>()
     for (const t of filtered) {
-      const day = t.transactionDate
-      if (!map.has(day)) map.set(day, [])
-      map.get(day)!.push(t)
+      if (!map.has(t.transactionDate)) map.set(t.transactionDate, [])
+      map.get(t.transactionDate)!.push(t)
     }
     for (const dayTxs of map.values()) {
       dayTxs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -95,6 +133,8 @@ export default function TransactionsPage() {
     () => monthTransactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0),
     [monthTransactions]
   )
+
+  const hasActiveFilters = categoryFilter !== "all" || subcategoryFilter !== "all"
 
   return (
     <>
@@ -129,20 +169,70 @@ export default function TransactionsPage() {
           </Button>
         </div>
 
+        {/* Active category filter banner */}
+        {activeCatLabel && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
+            <span className="text-sm font-medium flex-1">
+              Filter: <span className="text-primary">{activeCatLabel}</span>
+              {subcategoryFilter !== "all" && (
+                <> · <span className="text-primary">
+                  {subcategoriesByCategory[categoryFilter]?.find((s) => s.name === subcategoryFilter)?.label ?? subcategoryFilter}
+                </span></>
+              )}
+            </span>
+            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={clearFilters}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+
+        {/* Subcategory chip filter */}
+        {subcategoriesForFilter.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+            <button
+              type="button"
+              onClick={() => setSubcategoryFilter("all")}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                subcategoryFilter === "all"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border hover:bg-accent"
+              )}
+            >
+              Semua
+            </button>
+            {subcategoriesForFilter.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSubcategoryFilter(subcategoryFilter === s.name ? "all" : s.name)}
+                className={cn(
+                  "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  subcategoryFilter === s.name
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border hover:bg-accent"
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input className="pl-9" placeholder="Cari transaksi..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={categoryFilter} onValueChange={handleCategoryChange}>
             <SelectTrigger className="sm:w-40">
               <SelectValue placeholder="Kategori" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Semua Kategori</SelectItem>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+              {allCategories.map((c) => (
+                <SelectItem key={c.name} value={c.name}>{c.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -163,7 +253,17 @@ export default function TransactionsPage() {
             {loading ? (
               <LoadingSkeleton rows={8} className="py-4" />
             ) : filtered.length === 0 ? (
-              <EmptyState icon={ArrowLeftRight} title="Tidak ada transaksi" description={monthTransactions.length === 0 ? `Belum ada transaksi di ${monthLabel}` : "Coba ubah filter"} className="py-10" />
+              <EmptyState
+                icon={ArrowLeftRight}
+                title="Tidak ada transaksi"
+                description={monthTransactions.length === 0 ? `Belum ada transaksi di ${monthLabel}` : "Coba ubah filter"}
+                className="py-10"
+                action={hasActiveFilters ? (
+                  <Button size="sm" variant="outline" onClick={clearFilters}>
+                    <X className="h-3.5 w-3.5 mr-1" /> Hapus Filter
+                  </Button>
+                ) : undefined}
+              />
             ) : (
               grouped.map(([date, dayTxs]) => (
                 <div key={date}>
@@ -173,20 +273,12 @@ export default function TransactionsPage() {
                     </span>
                     <div className="flex-1 h-px bg-border" />
                     <span className="text-xs text-muted-foreground">
-                      {dayTxs.reduce((s, t) => s + (t.type === "income" ? t.amount : -t.amount), 0) >= 0
-                        ? "+"
-                        : ""}
+                      {dayTxs.reduce((s, t) => s + (t.type === "income" ? t.amount : -t.amount), 0) >= 0 ? "+" : ""}
                       {formatCurrency(dayTxs.reduce((s, t) => s + (t.type === "income" ? t.amount : -t.amount), 0))}
                     </span>
                   </div>
                   {dayTxs.map((t) => (
-                    <TransactionCard
-                      key={t.id}
-                      transaction={t}
-                      hideDate
-                      onDeleted={refetch}
-                      onEdit={setEditTransaction}
-                    />
+                    <TransactionCard key={t.id} transaction={t} hideDate onDeleted={refetch} onEdit={setEditTransaction} />
                   ))}
                 </div>
               ))
@@ -194,6 +286,7 @@ export default function TransactionsPage() {
           </CardContent>
         </Card>
       </div>
+
       <AddTransactionModal open={addOpen} onOpenChange={setAddOpen} onSuccess={refetch} />
       <EditTransactionModal
         transaction={editTransaction}
