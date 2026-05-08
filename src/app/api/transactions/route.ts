@@ -19,8 +19,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 let migrated = false
 async function ensureMigrations() {
   if (migrated) return
-  // Add subcategory column to transaction if it doesn't exist yet
   await dbClient.execute(`ALTER TABLE "transaction" ADD COLUMN subcategory TEXT`).catch(() => {})
+  await dbClient.execute(`ALTER TABLE budget ADD COLUMN subcategory TEXT`).catch(() => {})
+  // Backfill existing transactions with no subcategory → dll
+  await dbClient.execute(`UPDATE "transaction" SET subcategory = 'dll' WHERE subcategory IS NULL`).catch(() => {})
   migrated = true
 }
 
@@ -67,65 +69,70 @@ export async function POST(request: NextRequest) {
     .set({ balance: sql`${walletAccount.balance} + ${delta}` })
     .where(eq(walletAccount.id, walletAccountId))
 
-  await db
-    .insert(notification)
-    .values({
-      id: generateId(),
-      userId: session.user.id,
-      kind: "transaction_added",
-      title: type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat",
-      body: `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`,
-      isRead: false,
-    })
+  // Notifications and budget warnings are best-effort — never block transaction response
+  try {
+    await db
+      .insert(notification)
+      .values({
+        id: generateId(),
+        userId: session.user.id,
+        kind: "transaction_added",
+        title: type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat",
+        body: `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`,
+        isRead: false,
+      })
 
-  if (type === "expense") {
-    const [budgetRow] = await db
-      .select()
-      .from(budget)
-      .where(and(eq(budget.userId, session.user.id), eq(budget.category, category)))
-      .limit(1)
+    if (type === "expense") {
+      const [budgetRow] = await db
+        .select()
+        .from(budget)
+        .where(and(eq(budget.userId, session.user.id), eq(budget.category, category)))
+        .limit(1)
 
-    if (budgetRow) {
-      const monthStr = transactionDate.slice(0, 7)
-      const [spentRow] = await db
-        .select({ total: sum(transaction.amount) })
-        .from(transaction)
-        .where(
-          and(
-            eq(transaction.userId, session.user.id),
-            eq(transaction.category, category),
-            eq(transaction.type, "expense"),
-            like(transaction.transactionDate, `${monthStr}%`),
-          ),
-        )
+      if (budgetRow) {
+        const monthStr = transactionDate.slice(0, 7)
+        const [spentRow] = await db
+          .select({ total: sum(transaction.amount) })
+          .from(transaction)
+          .where(
+            and(
+              eq(transaction.userId, session.user.id),
+              eq(transaction.category, category),
+              eq(transaction.type, "expense"),
+              like(transaction.transactionDate, `${monthStr}%`),
+            ),
+          )
 
-      const currentSpent = Number(spentRow?.total ?? 0)
-      const previousSpent = currentSpent - Number(amount)
-      const budgetAmount = budgetRow.amount
-      const prevRatio = previousSpent / budgetAmount
-      const currRatio = currentSpent / budgetAmount
-      const catLabel = CATEGORY_LABELS[category] ?? category
+        const currentSpent = Number(spentRow?.total ?? 0)
+        const previousSpent = currentSpent - Number(amount)
+        const budgetAmount = budgetRow.amount
+        const prevRatio = previousSpent / budgetAmount
+        const currRatio = currentSpent / budgetAmount
+        const catLabel = CATEGORY_LABELS[category] ?? category
 
-      if (prevRatio < 1.0 && currRatio >= 1.0) {
-        await db.insert(notification).values({
-          id: generateId(),
-          userId: session.user.id,
-          kind: "budget_warning",
-          title: `Budget ${catLabel} Terlampaui!`,
-          body: `Pengeluaran ${catLabel} bulan ini Rp${currentSpent.toLocaleString("id-ID")} — melebihi budget Rp${budgetAmount.toLocaleString("id-ID")}.`,
-          isRead: false,
-        })
-      } else if (prevRatio < 0.8 && currRatio >= 0.8) {
-        await db.insert(notification).values({
-          id: generateId(),
-          userId: session.user.id,
-          kind: "budget_warning",
-          title: `Budget ${catLabel} Hampir Habis`,
-          body: `Pengeluaran ${catLabel} sudah ${Math.round(currRatio * 100)}% dari budget bulan ini (Rp${budgetAmount.toLocaleString("id-ID")}).`,
-          isRead: false,
-        })
+        if (prevRatio < 1.0 && currRatio >= 1.0) {
+          await db.insert(notification).values({
+            id: generateId(),
+            userId: session.user.id,
+            kind: "budget_warning",
+            title: `Budget ${catLabel} Terlampaui!`,
+            body: `Pengeluaran ${catLabel} bulan ini Rp${currentSpent.toLocaleString("id-ID")} — melebihi budget Rp${budgetAmount.toLocaleString("id-ID")}.`,
+            isRead: false,
+          })
+        } else if (prevRatio < 0.8 && currRatio >= 0.8) {
+          await db.insert(notification).values({
+            id: generateId(),
+            userId: session.user.id,
+            kind: "budget_warning",
+            title: `Budget ${catLabel} Hampir Habis`,
+            body: `Pengeluaran ${catLabel} sudah ${Math.round(currRatio * 100)}% dari budget bulan ini (Rp${budgetAmount.toLocaleString("id-ID")}).`,
+            isRead: false,
+          })
+        }
       }
     }
+  } catch {
+    // ignore — transaction already committed
   }
 
   return NextResponse.json(created, { status: 201 })

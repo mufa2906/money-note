@@ -150,22 +150,24 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
               </SelectContent>
             </Select>
             {subcategoriesForCategory.length > 0 && (
-              <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-hide">
-                {subcategoriesForCategory.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSelectedSubcategory(selectedSubcategory === s.name ? null : s.name)}
-                    className={cn(
-                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                      selectedSubcategory === s.name
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border hover:bg-accent"
-                    )}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+              <div className="w-full overflow-x-auto">
+                <div className="flex gap-1.5 pb-1 pt-1" style={{ width: "max-content" }}>
+                  {subcategoriesForCategory.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelectedSubcategory(selectedSubcategory === s.name ? null : s.name)}
+                      className={cn(
+                        "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap",
+                        selectedSubcategory === s.name
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border hover:bg-accent"
+                      )}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
