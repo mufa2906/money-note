@@ -190,12 +190,12 @@ function TransactionsPageInner() {
 
         {/* Subcategory chip filter */}
         {subcategoriesForFilter.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => setSubcategoryFilter("all")}
               className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                 subcategoryFilter === "all"
                   ? "bg-primary text-primary-foreground border-primary"
                   : "border-border hover:bg-accent"
@@ -209,7 +209,7 @@ function TransactionsPageInner() {
                 type="button"
                 onClick={() => setSubcategoryFilter(subcategoryFilter === s.name ? "all" : s.name)}
                 className={cn(
-                  "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                   subcategoryFilter === s.name
                     ? "bg-primary text-primary-foreground border-primary"
                     : "border-border hover:bg-accent"
