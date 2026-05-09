@@ -15,6 +15,8 @@ import { useTransactions } from "@/lib/hooks/use-transactions"
 import { formatCurrency } from "@/lib/utils"
 import { CategoryIcon } from "@/components/common/category-icon"
 import { useCategories } from "@/lib/hooks/use-categories"
+import { useBudgets } from "@/lib/hooks/use-budgets"
+import { AiInsightsCard } from "@/components/insights/ai-insights-card"
 
 const SpendingByCategoryChart = dynamic(
   () => import("@/components/insights/spending-by-category-chart").then((m) => ({ default: m.SpendingByCategoryChart })),
@@ -33,6 +35,7 @@ export default function InsightsPage() {
   const isPremium = user?.subscriptionTier !== "free"
   const { transactions, loading } = useTransactions()
   const { categories } = useCategories()
+  const { budgets } = useBudgets()
 
   const now = new Date()
   const thisYear = now.getFullYear()
@@ -137,6 +140,26 @@ export default function InsightsPage() {
   }))
 
   const monthName = now.toLocaleDateString("id-ID", { month: "long" })
+
+  const aiPayload = useMemo(() => ({
+    thisMonth: { income: thisIncome, expense: thisExpense, net: netThis },
+    lastMonth: { income: lastIncome, expense: lastExpense },
+    catBreakdown: catThis.map(([cat, amount]) => {
+      const prev = catLast[cat] || 0
+      const pct = thisExpense > 0 ? (amount / thisExpense) * 100 : 0
+      const change = prev > 0 ? ((amount - prev) / prev) * 100 : null
+      const catMeta = categories.find((c) => c.name === cat)
+      return { name: catMeta?.label ?? cat, amount, pct, change }
+    }),
+    budgets: budgets.map((b) => ({
+      category: b.category,
+      spent: b.spent,
+      limit: b.amount,
+      pct: b.amount > 0 ? (b.spent / b.amount) * 100 : 0,
+    })),
+    savingRate: thisIncome > 0 ? (netThis / thisIncome) * 100 : 0,
+    monthName,
+  }), [thisIncome, thisExpense, netThis, lastIncome, lastExpense, catThis, catLast, categories, budgets, monthName])
 
   return (
     <div className="space-y-4">
@@ -288,6 +311,9 @@ export default function InsightsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* AI Insights — premium only */}
+      {isPremium && !loading && <AiInsightsCard payload={aiPayload} />}
 
       {/* Charts */}
       <Card>

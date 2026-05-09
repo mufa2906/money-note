@@ -22,12 +22,11 @@ import Link from "next/link"
 
 export default function SettingsPage() {
   const { user, refetchUser } = useAuth()
-  const { permission, isSupported, requestPermission } = usePushNotification()
+  const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushNotification()
   const { toast } = useToast()
   const router = useRouter()
   const [name, setName] = useState(user?.name ?? "")
   const [saving, setSaving] = useState(false)
-  const [pushEnabled, setPushEnabled] = useState(permission === "granted")
   const [weeklyDigest, setWeeklyDigest] = useState(() => {
     if (typeof window !== "undefined") return localStorage.getItem("weeklyDigest") !== "false"
     return true
@@ -60,11 +59,13 @@ export default function SettingsPage() {
   }
 
   async function handlePushToggle(checked: boolean) {
-    if (checked && permission !== "granted") {
-      const result = await requestPermission()
-      setPushEnabled(result === "granted")
+    if (checked) {
+      const ok = await subscribe()
+      if (!ok) toast({ title: "Gagal mengaktifkan notifikasi", description: "Pastikan izin notifikasi diperbolehkan di browser.", variant: "destructive" })
+      else toast({ title: "Notifikasi push aktif!" })
     } else {
-      setPushEnabled(checked)
+      await unsubscribe()
+      toast({ title: "Notifikasi push dimatikan" })
     }
   }
 
@@ -151,7 +152,7 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">Pengingat tagihan & alert anggaran</p>
               </div>
               {isSupported ? (
-                <Switch checked={pushEnabled} onCheckedChange={handlePushToggle} />
+                <Switch checked={isSubscribed} onCheckedChange={handlePushToggle} disabled={pushLoading} />
               ) : (
                 <Badge variant="outline" className="text-xs">Tidak didukung</Badge>
               )}

@@ -3,6 +3,7 @@ import { db, dbClient } from "@/lib/db"
 import { transaction, walletAccount, notification, budget } from "@/lib/schema"
 import { eq, and, desc, sql, like, sum } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
+import { sendPushToUser } from "@/lib/push"
 
 const CATEGORY_LABELS: Record<string, string> = {
   makanan: "Makanan",
@@ -71,16 +72,19 @@ export async function POST(request: NextRequest) {
 
   // Notifications and budget warnings are best-effort — never block transaction response
   try {
+    const txTitle = type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat"
+    const txBody = `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`
     await db
       .insert(notification)
       .values({
         id: generateId(),
         userId: session.user.id,
         kind: "transaction_added",
-        title: type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat",
-        body: `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`,
+        title: txTitle,
+        body: txBody,
         isRead: false,
       })
+    await sendPushToUser(session.user.id, { title: txTitle, body: txBody, url: "/dashboard/transactions" })
 
     if (type === "expense") {
       const [budgetRow] = await db
@@ -110,24 +114,25 @@ export async function POST(request: NextRequest) {
         const currRatio = currentSpent / budgetAmount
         const catLabel = CATEGORY_LABELS[category] ?? category
 
+        let warnTitle = ""
+        let warnBody = ""
         if (prevRatio < 1.0 && currRatio >= 1.0) {
-          await db.insert(notification).values({
-            id: generateId(),
-            userId: session.user.id,
-            kind: "budget_warning",
-            title: `Budget ${catLabel} Terlampaui!`,
-            body: `Pengeluaran ${catLabel} bulan ini Rp${currentSpent.toLocaleString("id-ID")} — melebihi budget Rp${budgetAmount.toLocaleString("id-ID")}.`,
-            isRead: false,
-          })
+          warnTitle = `Budget ${catLabel} Terlampaui!`
+          warnBody = `Pengeluaran ${catLabel} bulan ini Rp${currentSpent.toLocaleString("id-ID")} — melebihi budget Rp${budgetAmount.toLocaleString("id-ID")}.`
         } else if (prevRatio < 0.8 && currRatio >= 0.8) {
+          warnTitle = `Budget ${catLabel} Hampir Habis`
+          warnBody = `Pengeluaran ${catLabel} sudah ${Math.round(currRatio * 100)}% dari budget bulan ini (Rp${budgetAmount.toLocaleString("id-ID")}).`
+        }
+        if (warnTitle) {
           await db.insert(notification).values({
             id: generateId(),
             userId: session.user.id,
             kind: "budget_warning",
-            title: `Budget ${catLabel} Hampir Habis`,
-            body: `Pengeluaran ${catLabel} sudah ${Math.round(currRatio * 100)}% dari budget bulan ini (Rp${budgetAmount.toLocaleString("id-ID")}).`,
+            title: warnTitle,
+            body: warnBody,
             isRead: false,
           })
+          await sendPushToUser(session.user.id, { title: warnTitle, body: warnBody, url: "/dashboard/budget" })
         }
       }
     }

@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, BellOff, Check, AlertTriangle, Info, TrendingDown, Bot } from "lucide-react"
+import { Bell, Check, AlertTriangle, Info, TrendingDown, Bot } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -29,7 +29,7 @@ const KIND_COLORS: Record<NotificationKind, string> = {
 }
 
 export default function NotificationsPage() {
-  const { permission, isSupported, requestPermission } = usePushNotification()
+  const { isSupported, isSubscribed, subscribe } = usePushNotification()
   const { notifications, loading, unreadCount, markAllRead } = useNotifications()
 
   return (
@@ -46,24 +46,16 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {isSupported && permission === "default" && (
+      {isSupported && !isSubscribed && (
         <Alert>
           <Bell className="h-4 w-4" />
           <AlertTitle className="text-sm">Aktifkan Notifikasi Push</AlertTitle>
           <AlertDescription className="text-xs mt-1">
             Dapatkan pengingat tagihan dan alert anggaran langsung di browser.{" "}
-            <Button variant="link" className="h-auto p-0 text-xs" onClick={requestPermission}>
+            <Button variant="link" className="h-auto p-0 text-xs" onClick={subscribe}>
               Aktifkan sekarang
             </Button>
           </AlertDescription>
-        </Alert>
-      )}
-
-      {isSupported && permission === "denied" && (
-        <Alert variant="destructive">
-          <BellOff className="h-4 w-4" />
-          <AlertTitle className="text-sm">Notifikasi diblokir</AlertTitle>
-          <AlertDescription className="text-xs">Aktifkan izin notifikasi di pengaturan browser kamu.</AlertDescription>
         </Alert>
       )}
 
