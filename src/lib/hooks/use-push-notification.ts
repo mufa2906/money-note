@@ -41,6 +41,14 @@ export function usePushNotification() {
 
       const reg = await navigator.serviceWorker.ready
       console.log("[push] SW ready:", reg.active?.state)
+
+      // Clear any stale subscription (different server key causes AbortError)
+      const existing = await reg.pushManager.getSubscription()
+      if (existing) {
+        console.log("[push] clearing stale subscription")
+        await existing.unsubscribe()
+      }
+
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
