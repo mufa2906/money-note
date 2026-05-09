@@ -55,19 +55,21 @@ export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }:
       <CategoryIcon category={t.category} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{t.description}</p>
-        <div className="flex items-center gap-1.5 mt-0.5 min-w-0 flex-wrap">
-          {!hideDate && <span className="text-xs text-muted-foreground shrink-0">{formatDate(t.transactionDate)}</span>}
-          <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4 shrink-0 max-w-[120px] truncate">
-            {catLabel}
-          </Badge>
-          {subcatLabel && (
-            <Badge variant="outline" className="text-xs py-0 px-1.5 h-4 shrink-0 max-w-[100px] truncate text-muted-foreground">
-              {subcatLabel}
+        <div className="overflow-x-auto mt-0.5 no-scrollbar">
+          <div className="flex items-center gap-1.5 w-max">
+            {!hideDate && <span className="text-xs text-muted-foreground shrink-0">{formatDate(t.transactionDate)}</span>}
+            <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4 shrink-0 whitespace-nowrap">
+              {catLabel}
             </Badge>
-          )}
-          {t.source === "bot" && (
-            <Badge variant="outline" className="text-xs py-0 px-1.5 h-4 shrink-0">Bot</Badge>
-          )}
+            {subcatLabel && (
+              <Badge variant="outline" className="text-xs py-0 px-1.5 h-4 shrink-0 text-muted-foreground whitespace-nowrap">
+                {subcatLabel}
+              </Badge>
+            )}
+            {t.source === "bot" && (
+              <Badge variant="outline" className="text-xs py-0 px-1.5 h-4 shrink-0">Bot</Badge>
+            )}
+          </div>
         </div>
       </div>
       <CurrencyDisplay amount={t.amount} type={t.type} showSign className="text-sm flex-shrink-0" />
