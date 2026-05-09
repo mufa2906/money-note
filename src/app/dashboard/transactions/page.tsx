@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { useState, useMemo, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Search, Plus, ArrowLeftRight, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Search, Plus, ArrowLeftRight, ChevronLeft, ChevronRight, X, Upload } from "lucide-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { TransactionCard } from "@/components/transactions/transaction-card"
 import { AddTransactionModal } from "@/components/transactions/add-transaction-modal"
 import { EditTransactionModal } from "@/components/transactions/edit-transaction-modal"
+import { ImportCsvModal } from "@/components/transactions/import-csv-modal"
 import { EmptyState } from "@/components/common/empty-state"
 import { LoadingSkeleton } from "@/components/common/loading-skeleton"
 import { useTransactions } from "@/lib/hooks/use-transactions"
@@ -41,6 +42,7 @@ function TransactionsPageInner() {
   const [subcategoryFilter, setSubcategoryFilter] = useState<string>(() => searchParams.get("subcategory") ?? "all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [addOpen, setAddOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null)
 
   const [selectedMonth, setSelectedMonth] = useState<{ year: number; month: number }>(() => {
@@ -146,9 +148,14 @@ function TransactionsPageInner() {
             <h1 className="text-xl font-bold">Transaksi</h1>
             <p className="text-sm text-muted-foreground">{filtered.length} transaksi</p>
           </div>
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Tambah
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-1" /> Import
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Tambah
+            </Button>
+          </div>
         </div>
 
         {/* Month navigation */}
@@ -289,6 +296,7 @@ function TransactionsPageInner() {
         </Card>
       </div>
 
+      <ImportCsvModal open={importOpen} onOpenChange={setImportOpen} onSuccess={refetch} />
       <AddTransactionModal open={addOpen} onOpenChange={setAddOpen} onSuccess={refetch} />
       <EditTransactionModal
         transaction={editTransaction}
