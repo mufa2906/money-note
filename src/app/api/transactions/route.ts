@@ -71,9 +71,13 @@ export async function POST(request: NextRequest) {
     .where(eq(walletAccount.id, walletAccountId))
 
   // Notifications and budget warnings are best-effort — never block transaction response
+  const txTitle = type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat"
+  const txBody = `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`
+
+  // Push runs independently so a DB notification error doesn't block it
+  sendPushToUser(session.user.id, { title: txTitle, body: txBody, url: "/dashboard/transactions" }).catch(console.error)
+
   try {
-    const txTitle = type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat"
-    const txBody = `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`
     await db
       .insert(notification)
       .values({
@@ -84,7 +88,6 @@ export async function POST(request: NextRequest) {
         body: txBody,
         isRead: false,
       })
-    await sendPushToUser(session.user.id, { title: txTitle, body: txBody, url: "/dashboard/transactions" })
 
     if (type === "expense") {
       const [budgetRow] = await db
@@ -136,8 +139,8 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-  } catch {
-    // ignore — transaction already committed
+  } catch (err) {
+    console.error("[tx] notification/budget error:", err)
   }
 
   return NextResponse.json(created, { status: 201 })
