@@ -27,11 +27,19 @@ export async function sendPushToUser(
     .where(eq(pushSubscription.userId, userId))
 
   await Promise.allSettled(
-    subs.map((s) =>
-      webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify(payload)
-      )
-    )
+    subs.map(async (s) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          JSON.stringify(payload)
+        )
+      } catch (err: unknown) {
+        // 404/410 = subscription expired or invalid key — remove from DB
+        const status = (err as { statusCode?: number })?.statusCode
+        if (status === 404 || status === 410) {
+          await db.delete(pushSubscription).where(eq(pushSubscription.endpoint, s.endpoint))
+        }
+      }
+    })
   )
 }
