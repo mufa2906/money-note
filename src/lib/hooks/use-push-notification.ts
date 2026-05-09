@@ -94,8 +94,10 @@ export function usePushNotification() {
 }
 
 function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  // Strip any characters that aren't valid base64url (guards against trailing newlines or invisible chars from env vars)
+  const clean = base64String.replace(/[^A-Za-z0-9\-_]/g, "")
+  const padding = "=".repeat((4 - (clean.length % 4)) % 4)
+  const base64 = (clean + padding).replace(/-/g, "+").replace(/_/g, "/")
   const rawData = atob(base64)
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
 }
