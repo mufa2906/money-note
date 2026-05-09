@@ -45,7 +45,7 @@ export function usePushNotification() {
       })
 
       const json = sub.toJSON()
-      await fetch("/api/push/subscribe", {
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -54,6 +54,7 @@ export function usePushNotification() {
           auth: json.keys?.auth,
         }),
       })
+      if (!res.ok) return false
 
       setIsSubscribed(true)
       return true
