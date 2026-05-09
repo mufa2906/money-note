@@ -27,33 +27,33 @@ export function usePushNotification() {
   }
 
   async function subscribe() {
-    if (!isSupported) { console.warn("[push] not supported"); return false }
+    if (!isSupported) { console.warn("[push] 0 not supported"); return false }
     setLoading(true)
     try {
+      console.log("[push] 1 requesting permission, current:", Notification.permission)
       const perm = await Notification.requestPermission()
       setPermission(perm)
-      if (perm !== "granted") { console.warn("[push] permission denied:", perm); return false }
+      if (perm !== "granted") { console.warn("[push] 1 permission denied:", perm); return false }
+      console.log("[push] 2 fetching VAPID key")
 
       const keyRes = await fetch("/api/push/vapid-key")
-      if (!keyRes.ok) { console.error("[push] vapid-key fetch failed:", keyRes.status); return false }
+      if (!keyRes.ok) { console.error("[push] 2 vapid-key fetch failed:", keyRes.status); return false }
       const { publicKey } = await keyRes.json()
-      console.log("[push] got VAPID key, subscribing...")
+      console.log("[push] 3 got key len:", publicKey?.length, "| waiting for SW")
 
       const reg = await navigator.serviceWorker.ready
-      console.log("[push] SW ready:", reg.active?.state)
+      console.log("[push] 4 SW ready, active:", reg.active?.state, "scope:", reg.scope)
 
-      // Clear any stale subscription (different server key causes AbortError)
       const existing = await reg.pushManager.getSubscription()
-      if (existing) {
-        console.log("[push] clearing stale subscription")
-        await existing.unsubscribe()
-      }
+      console.log("[push] 5 existing sub:", existing?.endpoint ?? "none")
+      if (existing) await existing.unsubscribe()
 
+      console.log("[push] 6 calling PushManager.subscribe")
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       })
-      console.log("[push] PushManager subscribed:", sub.endpoint)
+      console.log("[push] 7 subscribed:", sub.endpoint)
 
       const json = sub.toJSON()
       const res = await fetch("/api/push/subscribe", {
@@ -67,10 +67,10 @@ export function usePushNotification() {
       })
       if (!res.ok) {
         const body = await res.text()
-        console.error("[push] POST /api/push/subscribe failed:", res.status, body)
+        console.error("[push] 8 POST failed:", res.status, body)
         return false
       }
-
+      console.log("[push] 9 done")
       setIsSubscribed(true)
       return true
     } catch (err) {
