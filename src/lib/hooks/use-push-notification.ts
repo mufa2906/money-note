@@ -27,22 +27,25 @@ export function usePushNotification() {
   }
 
   async function subscribe() {
-    if (!isSupported) return false
+    if (!isSupported) { console.warn("[push] not supported"); return false }
     setLoading(true)
     try {
       const perm = await Notification.requestPermission()
       setPermission(perm)
-      if (perm !== "granted") return false
+      if (perm !== "granted") { console.warn("[push] permission denied:", perm); return false }
 
       const keyRes = await fetch("/api/push/vapid-key")
-      if (!keyRes.ok) return false
+      if (!keyRes.ok) { console.error("[push] vapid-key fetch failed:", keyRes.status); return false }
       const { publicKey } = await keyRes.json()
+      console.log("[push] got VAPID key, subscribing...")
 
       const reg = await navigator.serviceWorker.ready
+      console.log("[push] SW ready:", reg.active?.state)
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       })
+      console.log("[push] PushManager subscribed:", sub.endpoint)
 
       const json = sub.toJSON()
       const res = await fetch("/api/push/subscribe", {
@@ -54,11 +57,16 @@ export function usePushNotification() {
           auth: json.keys?.auth,
         }),
       })
-      if (!res.ok) return false
+      if (!res.ok) {
+        const body = await res.text()
+        console.error("[push] POST /api/push/subscribe failed:", res.status, body)
+        return false
+      }
 
       setIsSubscribed(true)
       return true
-    } catch {
+    } catch (err) {
+      console.error("[push] subscribe error:", err)
       return false
     } finally {
       setLoading(false)
