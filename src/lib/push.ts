@@ -18,7 +18,10 @@ export async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string; url?: string }
 ) {
-  if (!vapidPublicKey || !vapidPrivateKey) return
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    console.log("[push] VAPID keys not set, skipping")
+    return
+  }
   initVapid()
 
   const subs = await db
@@ -26,16 +29,19 @@ export async function sendPushToUser(
     .from(pushSubscription)
     .where(eq(pushSubscription.userId, userId))
 
+  console.log(`[push] sending to ${subs.length} subscription(s) for user ${userId}`)
+
   await Promise.allSettled(
     subs.map(async (s) => {
       try {
-        await webpush.sendNotification(
+        const res = await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           JSON.stringify(payload)
         )
+        console.log(`[push] sent OK status=${res.statusCode}`)
       } catch (err: unknown) {
-        // 404/410 = subscription expired or invalid key — remove from DB
         const status = (err as { statusCode?: number })?.statusCode
+        console.log(`[push] send failed status=${status}`, (err as { body?: string })?.body)
         if (status === 404 || status === 410) {
           await db.delete(pushSubscription).where(eq(pushSubscription.endpoint, s.endpoint))
         }
