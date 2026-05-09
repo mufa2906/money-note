@@ -54,7 +54,9 @@ export function TransactionCard({ transaction: t, onDeleted, onEdit, hideDate }:
     <div className={cn("flex items-center gap-3 py-3 border-b last:border-0")}>
       <CategoryIcon category={t.category} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{t.description}</p>
+        <div className="overflow-x-auto no-scrollbar">
+          <p className="text-sm font-medium whitespace-nowrap w-max">{t.description}</p>
+        </div>
         <div className="overflow-x-auto mt-0.5 no-scrollbar">
           <div className="flex items-center gap-1.5 w-max">
             {!hideDate && <span className="text-xs text-muted-foreground shrink-0">{formatDate(t.transactionDate)}</span>}
