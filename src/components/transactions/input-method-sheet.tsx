@@ -7,6 +7,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/lib/hooks/use-toast"
+import { useAiStatus } from "@/lib/hooks/use-ai-status"
 import { AddTransactionModal, type TransactionInitialValues } from "@/components/transactions/add-transaction-modal"
 
 type Mode = "idle" | "choosing-type" | "ocr-loading" | "transaction-review"
@@ -19,6 +20,7 @@ interface Props {
 export function InputMethodSheet({ open, onOpenChange }: Props) {
   const router = useRouter()
   const { toast } = useToast()
+  const { aiAvailable } = useAiStatus()
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
 
@@ -48,6 +50,30 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
 
   async function handleTypeChoice(type: "transaction" | "splitbill") {
     if (!capturedImage) return
+
+    if (!aiAvailable) {
+      // AI off — skip OCR, go straight to empty form / empty bill
+      if (type === "transaction") {
+        setMode("transaction-review")
+        setTxModalOpen(true)
+      } else {
+        reset()
+        try {
+          const billRes = await fetch("/api/bills", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: "Tagihan Baru" }),
+          })
+          if (!billRes.ok) throw new Error()
+          const bill = await billRes.json()
+          router.push(`/dashboard/split-bill/${bill.id}`)
+        } catch {
+          toast({ title: "Gagal membuat tagihan", variant: "destructive" })
+        }
+      }
+      return
+    }
+
     setMode("ocr-loading")
 
     if (type === "transaction") {
@@ -69,8 +95,9 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
         setMode("transaction-review")
         setTxModalOpen(true)
       } catch {
-        toast({ title: "OCR gagal", description: "Gagal membaca gambar. Coba lagi.", variant: "destructive" })
-        reset()
+        toast({ title: "OCR gagal", description: "Gagal membaca gambar. Form diisi manual.", variant: "destructive" })
+        setMode("transaction-review")
+        setTxModalOpen(true)
       }
     } else {
       try {
@@ -106,8 +133,21 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
         reset()
         router.push(`/dashboard/split-bill/${bill.id}`)
       } catch {
-        toast({ title: "OCR gagal", description: "Gagal membaca gambar. Coba lagi.", variant: "destructive" })
+        toast({ title: "OCR gagal", description: "Gagal membaca gambar. Buat tagihan kosong.", variant: "destructive" })
         reset()
+        try {
+          const billRes = await fetch("/api/bills", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: "Tagihan Baru" }),
+          })
+          if (billRes.ok) {
+            const bill = await billRes.json()
+            router.push(`/dashboard/split-bill/${bill.id}`)
+          }
+        } catch {
+          // silent — user stays on current page
+        }
       }
     }
   }
@@ -162,6 +202,7 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
                 <Image className="h-5 w-5 text-primary" />
               </div>
               <span className="text-xs font-medium">Gambar</span>
+              {!aiAvailable && <span className="text-[10px] text-muted-foreground leading-none">manual</span>}
             </button>
             <button
               onClick={() => cameraRef.current?.click()}
@@ -171,6 +212,7 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
                 <Camera className="h-5 w-5 text-primary" />
               </div>
               <span className="text-xs font-medium">Kamera</span>
+              {!aiAvailable && <span className="text-[10px] text-muted-foreground leading-none">manual</span>}
             </button>
           </div>
         </DrawerContent>
@@ -192,7 +234,9 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold">Transaksi</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Catat pengeluaran dari struk</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {aiAvailable ? "Catat pengeluaran dari struk" : "Catat manual dari foto"}
+                </p>
               </div>
             </button>
             <button
@@ -204,7 +248,9 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold">Bagi Tagihan</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Bagi ke beberapa orang</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {aiAvailable ? "Bagi ke beberapa orang" : "Buat tagihan manual"}
+                </p>
               </div>
             </button>
           </div>

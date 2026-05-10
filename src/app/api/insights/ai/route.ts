@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api-auth"
-
-const GEMINI_MODEL = "gemini-2.5-flash"
-const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+import { callGeminiText } from "@/lib/gemini"
 
 export async function POST(request: NextRequest) {
   const { session, error } = await requireAuth(request)
@@ -14,8 +12,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Premium feature" }, { status: 403 })
   }
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return NextResponse.json({ error: "AI not configured" }, { status: 503 })
+  if (!process.env.GEMINI_API_KEY) {
+    return NextResponse.json({ error: "AI not configured" }, { status: 503 })
+  }
 
   const body = await request.json()
   const { thisMonth, lastMonth, catBreakdown, budgets, savingRate, monthName } = body
@@ -51,22 +50,12 @@ Berikan analisis dalam format JSON dengan struktur TEPAT seperti ini:
 
 Gunakan nada yang supportif, tidak menghakimi, dan berikan angka Rupiah yang spesifik saat relevan.`
 
-  const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.7 },
-    }),
-  })
-
-  if (!res.ok) {
+  let text: string
+  try {
+    text = await callGeminiText(prompt, { temperature: 0.7 })
+  } catch {
     return NextResponse.json({ error: "AI gagal merespon" }, { status: 502 })
   }
-
-  const data = await res.json()
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) return NextResponse.json({ error: "AI tidak menghasilkan respons" }, { status: 502 })
 
   try {
     const parsed = JSON.parse(text)
