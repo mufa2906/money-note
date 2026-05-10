@@ -149,8 +149,8 @@ Beberapa pengaturan hanya bisa diubah oleh admin (pemilik aplikasi), bukan oleh 
 
 ### Mei 2026 (rev 2) — Perbaikan UX Split Bill
 - Input item split bill kini pakai harga asli + diskon → harga bayar dihitung otomatis
-- Siap: fitur "Tambah Saya" sebagai peserta split bill (shortcut satu klik)
-- Siap: toggle sinkronisasi tagihan ke transaksi yang lebih jelas per peserta
+- Tombol "Tambah Saya" di peserta: satu klik tambah diri sendiri tanpa ketik nama manual
+- Card breakdown peserta "Saya" muncul di urutan pertama + tombol sync langsung visible tanpa expand
 
 ### Mei 2026 — OCR Transaksi & Split Bill Sync
 - Tombol tambah transaksi kini punya 3 pilihan: Manual, Gambar, atau Kamera
