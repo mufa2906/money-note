@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server"
+
 const GEMINI_MODEL = "gemini-2.5-flash"
 const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
@@ -34,6 +36,34 @@ export async function callGeminiVision(
     throw new Error(`Gemini error ${res.status}: ${err}`)
   }
   return extractText(res)
+}
+
+export function extractOcrImage(body: unknown): { image: string; mimeType: string } | null {
+  const b = body as Record<string, unknown> | null
+  const image = typeof b?.image === "string" ? b.image : null
+  if (!image) return null
+  const mimeType = typeof b?.mimeType === "string" && b.mimeType.startsWith("image/") ? b.mimeType : "image/jpeg"
+  return { image, mimeType }
+}
+
+export async function callGeminiOcr(
+  prompt: string,
+  image: string,
+  mimeType: string,
+  logPrefix: string,
+): Promise<{ ok: true; data: unknown } | { ok: false; response: ReturnType<typeof NextResponse.json> }> {
+  let textPart: string
+  try {
+    textPart = await callGeminiVision(prompt, image, mimeType)
+  } catch (e) {
+    console.error(`${logPrefix} OCR failed:`, e)
+    return { ok: false, response: NextResponse.json({ error: "OCR gagal. Coba foto yang lebih jelas." }, { status: 502 }) }
+  }
+  try {
+    return { ok: true, data: JSON.parse(textPart) }
+  } catch {
+    return { ok: false, response: NextResponse.json({ error: "Gagal parse hasil OCR." }, { status: 502 }) }
+  }
 }
 
 export async function callGeminiText(

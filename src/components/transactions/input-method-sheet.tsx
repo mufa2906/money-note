@@ -48,24 +48,27 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
     setMode("choosing-type")
   }
 
+  async function createEmptyBill() {
+    const res = await fetch("/api/bills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Tagihan Baru" }),
+    })
+    if (!res.ok) throw new Error("Gagal membuat tagihan")
+    return res.json() as Promise<{ id: string }>
+  }
+
   async function handleTypeChoice(type: "transaction" | "splitbill") {
     if (!capturedImage) return
 
     if (!aiAvailable) {
-      // AI off — skip OCR, go straight to empty form / empty bill
       if (type === "transaction") {
         setMode("transaction-review")
         setTxModalOpen(true)
       } else {
         reset()
         try {
-          const billRes = await fetch("/api/bills", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: "Tagihan Baru" }),
-          })
-          if (!billRes.ok) throw new Error()
-          const bill = await billRes.json()
+          const bill = await createEmptyBill()
           router.push(`/dashboard/split-bill/${bill.id}`)
         } catch {
           toast({ title: "Gagal membuat tagihan", variant: "destructive" })
@@ -112,10 +115,7 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
         const billRes = await fetch("/api/bills", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: ocr.title || "Tagihan Baru",
-            charges: ocr.charges ?? [],
-          }),
+          body: JSON.stringify({ title: ocr.title || "Tagihan Baru", charges: ocr.charges ?? [] }),
         })
         if (!billRes.ok) throw new Error("Gagal membuat tagihan")
         const bill = await billRes.json()
@@ -136,15 +136,8 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
         toast({ title: "OCR gagal", description: "Gagal membaca gambar. Buat tagihan kosong.", variant: "destructive" })
         reset()
         try {
-          const billRes = await fetch("/api/bills", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: "Tagihan Baru" }),
-          })
-          if (billRes.ok) {
-            const bill = await billRes.json()
-            router.push(`/dashboard/split-bill/${bill.id}`)
-          }
+          const bill = await createEmptyBill()
+          router.push(`/dashboard/split-bill/${bill.id}`)
         } catch {
           // silent — user stays on current page
         }

@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { and, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { bill, billParticipant } from "@/lib/schema"
+import { billParticipant } from "@/lib/schema"
 import { requireAuth, generateId } from "@/lib/api-auth"
-
-async function ownsBill(billId: string, userId: string) {
-  const [b] = await db.select({ id: bill.id }).from(bill).where(and(eq(bill.id, billId), eq(bill.userId, userId))).limit(1)
-  return !!b
-}
+import { ownsBill } from "@/lib/bill-db"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { session, error } = await requireAuth(request)

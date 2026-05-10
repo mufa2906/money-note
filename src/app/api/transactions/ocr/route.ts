@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api-auth"
-import { callGeminiVision } from "@/lib/gemini"
+import { extractOcrImage, callGeminiOcr } from "@/lib/gemini"
 
 const PROMPT = `Kamu adalah asisten yang membaca foto struk/nota pembelian (Indonesia). Ekstrak data transaksi dari struk dan kembalikan HANYA JSON valid (tanpa markdown, tanpa penjelasan) dengan format:
 {
@@ -23,26 +23,13 @@ export async function POST(request: NextRequest) {
   if (error) return error
 
   const body = await request.json().catch(() => null)
-  const image = typeof body?.image === "string" ? body.image : null
-  const mimeType = typeof body?.mimeType === "string" && body.mimeType.startsWith("image/") ? body.mimeType : "image/jpeg"
-  if (!image) return NextResponse.json({ error: "image required (base64)" }, { status: 400 })
+  const img = extractOcrImage(body)
+  if (!img) return NextResponse.json({ error: "image required (base64)" }, { status: 400 })
 
-  let textPart: string
-  try {
-    textPart = await callGeminiVision(PROMPT, image, mimeType)
-  } catch (e) {
-    console.error("Gemini transaction OCR failed:", e)
-    return NextResponse.json({ error: "OCR gagal. Coba foto yang lebih jelas." }, { status: 502 })
-  }
+  const result = await callGeminiOcr(PROMPT, img.image, img.mimeType, "Gemini transaction")
+  if (!result.ok) return result.response
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(textPart)
-  } catch {
-    return NextResponse.json({ error: "Gagal parse hasil OCR." }, { status: 502 })
-  }
-
-  const p = parsed as Record<string, unknown>
+  const p = result.data as Record<string, unknown>
   const amount = Number(p?.amount)
   const description = typeof p?.description === "string" && p.description.trim() ? p.description.trim() : "Tidak diketahui"
   const type = p?.type === "income" ? "income" : "expense"

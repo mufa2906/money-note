@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { bill, billItem, billParticipant, billItemAssignment } from "@/lib/schema"
 import { requireAuth } from "@/lib/api-auth"
-import type { BillCharge, BillPaymentInfo } from "@/types"
+import { parseDbCharges, sanitizeCharges, parsePaymentInfo } from "@/lib/bill-utils"
 
 async function loadBill(billId: string, userId: string) {
   const [b] = await db
@@ -12,44 +12,6 @@ async function loadBill(billId: string, userId: string) {
     .where(and(eq(bill.id, billId), eq(bill.userId, userId)))
     .limit(1)
   return b ?? null
-}
-
-function parseCharges(row: { charges: string | null; serviceCharge: number; tax: number }): BillCharge[] {
-  if (row.charges) {
-    try {
-      const parsed = JSON.parse(row.charges)
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((c: unknown) => {
-            const obj = c as Record<string, unknown>
-            const name = typeof obj?.name === "string" ? obj.name : ""
-            const amount = Number(obj?.amount)
-            if (!name || !Number.isFinite(amount)) return null
-            return { name, amount }
-          })
-          .filter((c): c is BillCharge => c !== null)
-      }
-    } catch {
-      // fall through to legacy fallback
-    }
-  }
-  const fallback: BillCharge[] = []
-  if (row.serviceCharge > 0) fallback.push({ name: "Service Charge", amount: row.serviceCharge })
-  if (row.tax > 0) fallback.push({ name: "PPN", amount: row.tax })
-  return fallback
-}
-
-function sanitizeCharges(input: unknown): BillCharge[] | null {
-  if (!Array.isArray(input)) return null
-  return input
-    .map((c: unknown) => {
-      const obj = c as Record<string, unknown>
-      const name = typeof obj?.name === "string" ? obj.name.trim() : ""
-      const amount = Number(obj?.amount)
-      if (!name || !Number.isFinite(amount)) return null
-      return { name, amount }
-    })
-    .filter((c): c is BillCharge => c !== null)
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -75,19 +37,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     assignmentsByItem.set(a.itemId, arr)
   }
 
-  let paymentInfo: BillPaymentInfo | null = null
-  if (b.paymentInfo) {
-    try { paymentInfo = JSON.parse(b.paymentInfo) } catch { /* ignore */ }
-  }
-
   return NextResponse.json({
     id: b.id,
     userId: b.userId,
     title: b.title,
     description: b.description ?? null,
-    paymentInfo,
+    paymentInfo: parsePaymentInfo(b.paymentInfo),
     photoUrl: b.photoUrl,
-    charges: parseCharges(b),
+    charges: parseDbCharges(b),
     createdAt: b.createdAt,
     updatedAt: b.updatedAt,
     items: items.map((i) => ({ ...i, participantIds: assignmentsByItem.get(i.id) ?? [] })),
@@ -119,9 +76,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   if (body?.photoUrl !== undefined) updates.photoUrl = body.photoUrl ?? null
   if (body?.charges !== undefined) {
-    const sanitized = sanitizeCharges(body.charges)
-    if (sanitized === null) return NextResponse.json({ error: "charges must be an array" }, { status: 400 })
-    updates.charges = JSON.stringify(sanitized)
+    if (!Array.isArray(body.charges)) return NextResponse.json({ error: "charges must be an array" }, { status: 400 })
+    updates.charges = JSON.stringify(sanitizeCharges(body.charges))
     updates.serviceCharge = 0
     updates.tax = 0
   }

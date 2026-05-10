@@ -3,20 +3,7 @@ import { desc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { bill } from "@/lib/schema"
 import { requireAuth, generateId } from "@/lib/api-auth"
-import type { BillCharge, BillPaymentInfo } from "@/types"
-
-function sanitizeCharges(input: unknown): BillCharge[] {
-  if (!Array.isArray(input)) return []
-  return input
-    .map((c: unknown) => {
-      const obj = c as Record<string, unknown>
-      const name = typeof obj?.name === "string" ? obj.name.trim() : ""
-      const amount = Number(obj?.amount)
-      if (!name || !Number.isFinite(amount)) return null
-      return { name, amount }
-    })
-    .filter((c): c is BillCharge => c !== null)
-}
+import { parseDbCharges, sanitizeCharges, parsePaymentInfo } from "@/lib/bill-utils"
 
 export async function GET(request: NextRequest) {
   const { session, error } = await requireAuth(request)
@@ -29,36 +16,17 @@ export async function GET(request: NextRequest) {
     .orderBy(desc(bill.createdAt))
 
   return NextResponse.json(
-    rows.map((b) => {
-      let charges: BillCharge[] = []
-      if (b.charges) {
-        try {
-          const parsed = JSON.parse(b.charges)
-          if (Array.isArray(parsed)) charges = parsed.filter((c) => c?.name && Number.isFinite(c?.amount))
-        } catch {
-          // ignore
-        }
-      }
-      if (charges.length === 0) {
-        if (b.serviceCharge > 0) charges.push({ name: "Service Charge", amount: b.serviceCharge })
-        if (b.tax > 0) charges.push({ name: "PPN", amount: b.tax })
-      }
-      let paymentInfo: BillPaymentInfo | null = null
-      if (b.paymentInfo) {
-        try { paymentInfo = JSON.parse(b.paymentInfo) } catch { /* ignore */ }
-      }
-      return {
-        id: b.id,
-        userId: b.userId,
-        title: b.title,
-        description: b.description ?? null,
-        paymentInfo,
-        photoUrl: b.photoUrl,
-        charges,
-        createdAt: b.createdAt,
-        updatedAt: b.updatedAt,
-      }
-    }),
+    rows.map((b) => ({
+      id: b.id,
+      userId: b.userId,
+      title: b.title,
+      description: b.description ?? null,
+      paymentInfo: parsePaymentInfo(b.paymentInfo),
+      photoUrl: b.photoUrl,
+      charges: parseDbCharges(b),
+      createdAt: b.createdAt,
+      updatedAt: b.updatedAt,
+    })),
   )
 }
 
