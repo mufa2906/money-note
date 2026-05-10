@@ -42,6 +42,7 @@ export interface TransactionInitialValues {
   category?: string
   type?: "income" | "expense"
   billParticipantId?: string
+  walletAccountId?: string
 }
 
 interface AddTransactionModalProps {
@@ -70,12 +71,14 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
 
   useEffect(() => {
     if (open) {
+      const defaultAccount = initialValues?.walletAccountId ?? (initialValues ? (accounts[0]?.id ?? "") : "")
       form.reset({
         type: initialValues?.type ?? "expense",
         amount: initialValues?.amount ?? "",
         description: initialValues?.description ?? "",
         category: initialValues?.category ?? "",
         date: initialValues?.date ?? new Date(),
+        walletAccountId: defaultAccount,
       })
       setSelectedSubcategory(null)
     }
@@ -161,7 +164,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
 
           <div className="space-y-1">
             <Label>Kategori</Label>
-            <Select onValueChange={(v) => { form.setValue("category", v); setSelectedSubcategory(null) }}>
+            <Select value={form.watch("category")} onValueChange={(v) => { form.setValue("category", v); setSelectedSubcategory(null) }}>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
@@ -194,7 +197,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
 
           <div className="space-y-1">
             <Label>Akun</Label>
-            <Select onValueChange={(v) => form.setValue("walletAccountId", v)}>
+            <Select value={form.watch("walletAccountId")} onValueChange={(v) => form.setValue("walletAccountId", v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih akun" />
               </SelectTrigger>
