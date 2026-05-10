@@ -58,7 +58,8 @@ export interface Transaction {
   subcategory?: string | null
   description: string
   transactionDate: string
-  source: "manual" | "bot" | "import"
+  source: "manual" | "bot" | "import" | "split_bill"
+  billParticipantId?: string | null
   createdAt: string
 }
 
@@ -93,6 +94,7 @@ export interface BillParticipant {
   name: string
   contact: string | null
   status: SplitStatus
+  transactionId?: string | null
 }
 
 export interface BillPaymentInfo {

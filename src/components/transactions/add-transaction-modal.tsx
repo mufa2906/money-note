@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -35,13 +35,23 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+export interface TransactionInitialValues {
+  amount?: string
+  description?: string
+  date?: Date
+  category?: string
+  type?: "income" | "expense"
+  billParticipantId?: string
+}
+
 interface AddTransactionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
+  initialValues?: TransactionInitialValues
 }
 
-export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransactionModalProps) {
+export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValues }: AddTransactionModalProps) {
   const { toast } = useToast()
   const { accounts, refetch: refetchAccounts } = useAccounts()
   const { refetch: refetchTransactions } = useTransactions()
@@ -57,6 +67,19 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
     resolver: zodResolver(schema),
     defaultValues: { type: "expense", date: new Date() },
   })
+
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        type: initialValues?.type ?? "expense",
+        amount: initialValues?.amount ?? "",
+        description: initialValues?.description ?? "",
+        category: initialValues?.category ?? "",
+        date: initialValues?.date ?? new Date(),
+      })
+      setSelectedSubcategory(null)
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const transactionType = form.watch("type")
   const selectedCategory = form.watch("category")
@@ -76,7 +99,8 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
           subcategory: selectedSubcategory ?? null,
           description: data.description,
           transactionDate: format(data.date, "yyyy-MM-dd"),
-          source: "manual",
+          source: initialValues?.billParticipantId ? "split_bill" : "manual",
+          billParticipantId: initialValues?.billParticipantId ?? null,
         }),
       })
 
@@ -86,8 +110,6 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
         title: "Transaksi dicatat!",
         description: `${data.description} berhasil disimpan.`,
       })
-      form.reset({ type: "expense", date: new Date() })
-      setSelectedSubcategory(null)
       onOpenChange(false)
       await Promise.all([refetchTransactions(), refetchAccounts(), refetchNotifications()])
       onSuccess?.()

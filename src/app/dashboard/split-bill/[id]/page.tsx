@@ -17,6 +17,7 @@ import { formatCurrency } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { BillItem, BillParticipant, BillCharge, BillPaymentInfo, ParticipantBreakdown, SplitStatus } from "@/types"
+import { AddTransactionModal } from "@/components/transactions/add-transaction-modal"
 
 interface Mutations {
   patchBill: (updates: { title?: string; description?: string | null; paymentInfo?: BillPaymentInfo | null; charges?: BillCharge[] }) => Promise<void>
@@ -278,7 +279,15 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
       <PaymentInfoSection paymentInfo={bill.paymentInfo} mutations={mutations} />
 
       {breakdowns.length > 0 && (
-        <BreakdownSection breakdowns={breakdowns} billTitle={bill.title} paymentInfo={bill.paymentInfo} mutations={mutations} />
+        <BreakdownSection
+          breakdowns={breakdowns}
+          billTitle={bill.title}
+          billCreatedAt={bill.createdAt}
+          participants={bill.participants}
+          paymentInfo={bill.paymentInfo}
+          mutations={mutations}
+          onSynced={refetch}
+        />
       )}
     </div>
   )
@@ -633,7 +642,7 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
   )
 }
 
-function BreakdownSection({ breakdowns, billTitle, paymentInfo, mutations }: { breakdowns: ParticipantBreakdown[]; billTitle: string; paymentInfo: BillPaymentInfo | null; mutations: Mutations }) {
+function BreakdownSection({ breakdowns, billTitle, billCreatedAt, participants, paymentInfo, mutations, onSynced }: { breakdowns: ParticipantBreakdown[]; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; paymentInfo: BillPaymentInfo | null; mutations: Mutations; onSynced: () => void }) {
   function buildWaText(b: ParticipantBreakdown) {
     const chargesTotal = b.chargeShares.reduce((s, c) => s + c.amount, 0)
     const hasItems = b.lineItems.length > 0
@@ -685,18 +694,20 @@ function BreakdownSection({ breakdowns, billTitle, paymentInfo, mutations }: { b
       </CardHeader>
       <CardContent className="space-y-3">
         {breakdowns.map((b) => (
-          <BreakdownCard key={b.participantId} breakdown={b} buildWaText={buildWaText} mutations={mutations} />
+          <BreakdownCard key={b.participantId} breakdown={b} buildWaText={buildWaText} mutations={mutations} billTitle={billTitle} billCreatedAt={billCreatedAt} participants={participants} onSynced={onSynced} />
         ))}
       </CardContent>
     </Card>
   )
 }
 
-function BreakdownCard({ breakdown, buildWaText, mutations }: { breakdown: ParticipantBreakdown; buildWaText: (b: ParticipantBreakdown) => string; mutations: Mutations }) {
+function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreatedAt, participants, onSynced }: { breakdown: ParticipantBreakdown; buildWaText: (b: ParticipantBreakdown) => string; mutations: Mutations; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; onSynced: () => void }) {
   const chargesTotal = breakdown.chargeShares.reduce((s, c) => s + c.amount, 0)
   const hasItems = breakdown.lineItems.length > 0
   const hasCharges = chargesTotal > 0
   const [expanded, setExpanded] = useState(false)
+  const [txOpen, setTxOpen] = useState(false)
+  const participant = participants.find((p) => p.id === breakdown.participantId)
 
   function togglePaid() {
     mutations.updateParticipant(breakdown.participantId, { status: breakdown.status === "paid" ? "unpaid" : "paid" })
@@ -779,8 +790,30 @@ function BreakdownCard({ breakdown, buildWaText, mutations }: { breakdown: Parti
               {breakdown.status === "paid" ? "Tandai Belum Lunas" : "Tandai Lunas"}
             </Button>
           </div>
+          {participant?.transactionId ? (
+            <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+              <Check className="h-3 w-3" />
+              <span>Sudah dicatat ke transaksi</span>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="h-7 text-xs w-full" onClick={() => setTxOpen(true)}>
+              <Receipt className="h-3 w-3 mr-1" /> Catat ke Transaksi
+            </Button>
+          )}
         </div>
       )}
+      <AddTransactionModal
+        open={txOpen}
+        onOpenChange={setTxOpen}
+        initialValues={{
+          amount: String(Math.round(breakdown.total)),
+          description: `Bagi tagihan: ${billTitle}`,
+          type: "expense",
+          date: new Date(billCreatedAt),
+          billParticipantId: breakdown.participantId,
+        }}
+        onSuccess={onSynced}
+      />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db, dbClient } from "@/lib/db"
-import { transaction, walletAccount, notification, budget } from "@/lib/schema"
+import { transaction, walletAccount, notification, budget, billParticipant } from "@/lib/schema"
 import { eq, and, desc, sql, like, sum } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
 import { sendPushToUser } from "@/lib/push"
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   await ensureMigrations()
 
   const body = await request.json()
-  const { walletAccountId, amount, type, category, subcategory, description, transactionDate, source = "manual" } = body
+  const { walletAccountId, amount, type, category, subcategory, description, transactionDate, source = "manual", billParticipantId } = body
 
   if (!walletAccountId || !amount || !type || !category || !description || !transactionDate) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -61,8 +61,16 @@ export async function POST(request: NextRequest) {
 
   const [created] = await db
     .insert(transaction)
-    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, subcategory: subcategory ?? null, description, transactionDate, source })
+    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, subcategory: subcategory ?? null, description, transactionDate, source, billParticipantId: billParticipantId ?? null })
     .returning()
+
+  if (billParticipantId) {
+    await db
+      .update(billParticipant)
+      .set({ transactionId: created.id })
+      .where(eq(billParticipant.id, billParticipantId))
+      .catch(console.error)
+  }
 
   const delta = type === "income" ? Number(amount) : -Number(amount)
   await db
