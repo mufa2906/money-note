@@ -2,7 +2,8 @@
 
 import { use, useState, useMemo, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X, Coins, CreditCard, ChevronDown, ChevronUp, Send } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X, Coins, CreditCard, ChevronDown, ChevronUp, Send, UserPlus } from "lucide-react"
+import { useAuth } from "@/providers/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -24,7 +25,7 @@ interface Mutations {
   addItem: (data: { name: string; price: number; qty: number; originalPrice?: number | null }) => Promise<void>
   updateItem: (itemId: string, updates: { name?: string; price?: number; originalPrice?: number | null; qty?: number; participantIds?: string[] }) => Promise<void>
   deleteItem: (itemId: string) => Promise<void>
-  addParticipant: (data: { name: string; contact?: string }) => Promise<void>
+  addParticipant: (data: { name: string; contact?: string }) => Promise<string | null>
   updateParticipant: (pid: string, updates: { status?: SplitStatus }) => Promise<void>
   deleteParticipant: (pid: string) => Promise<void>
 }
@@ -33,8 +34,26 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params)
   const { bill, loading, refetch, setBill } = useBill(id)
   const { toast } = useToast()
+  const { user } = useAuth()
   const [titleEdit, setTitleEdit] = useState<string | null>(null)
   const [descEdit, setDescEdit] = useState<string | null>(null)
+  const [ownerParticipantId, setOwnerParticipantIdState] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null
+    return localStorage.getItem(`bill-owner-${id}`) ?? null
+  })
+
+  function setOwnerParticipantId(pid: string | null) {
+    setOwnerParticipantIdState(pid)
+    if (pid) localStorage.setItem(`bill-owner-${id}`, pid)
+    else localStorage.removeItem(`bill-owner-${id}`)
+  }
+
+  useEffect(() => {
+    if (bill && ownerParticipantId) {
+      const stillExists = bill.participants.some((p) => p.id === ownerParticipantId)
+      if (!stillExists) setOwnerParticipantId(null)
+    }
+  }, [bill?.participants, ownerParticipantId])
 
   const breakdowns = useMemo(() => (bill ? computeBreakdown(bill) : []), [bill])
 
@@ -139,10 +158,11 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
       if (!res.ok) {
         setBill((prev) => prev && { ...prev, participants: prev.participants.filter((p) => p.id !== tempId) })
         toast({ title: "Gagal tambah peserta", variant: "destructive" })
-        return
+        return null
       }
       const created = await res.json()
       setBill((prev) => prev && { ...prev, participants: prev.participants.map((p) => p.id === tempId ? created : p) })
+      return created.id as string
     },
 
     async updateParticipant(pid, updates) {
@@ -275,7 +295,13 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
 
       <ItemsSection items={bill.items} participants={bill.participants} mutations={mutations} />
       <ChargesSection charges={bill.charges} mutations={mutations} />
-      <ParticipantsSection participants={bill.participants} mutations={mutations} />
+      <ParticipantsSection
+        participants={bill.participants}
+        mutations={mutations}
+        userName={user?.name ?? "Saya"}
+        ownerParticipantId={ownerParticipantId}
+        onSetOwner={setOwnerParticipantId}
+      />
       <PaymentInfoSection paymentInfo={bill.paymentInfo} mutations={mutations} />
 
       {breakdowns.length > 0 && (
@@ -286,6 +312,7 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
           participants={bill.participants}
           paymentInfo={bill.paymentInfo}
           mutations={mutations}
+          ownerParticipantId={ownerParticipantId}
           onSynced={refetch}
         />
       )}
@@ -596,7 +623,13 @@ function ChargeRow({ charge, onChange, onDelete }: { charge: BillCharge; onChang
   )
 }
 
-function ParticipantsSection({ participants, mutations }: { participants: BillParticipant[]; mutations: Mutations }) {
+function ParticipantsSection({ participants, mutations, userName, ownerParticipantId, onSetOwner }: {
+  participants: BillParticipant[]
+  mutations: Mutations
+  userName: string
+  ownerParticipantId: string | null
+  onSetOwner: (pid: string | null) => void
+}) {
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState("")
   const [contact, setContact] = useState("")
@@ -611,13 +644,29 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
     reset()
   }
 
+  async function addSelf() {
+    const alreadyAdded = participants.some((p) => p.id === ownerParticipantId)
+    if (alreadyAdded) return
+    const newId = await mutations.addParticipant({ name: userName })
+    if (newId) onSetOwner(newId)
+  }
+
+  const selfAlreadyAdded = ownerParticipantId !== null && participants.some((p) => p.id === ownerParticipantId)
+
   return (
     <Card>
       <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Peserta</CardTitle>
-        <Button size="sm" variant="outline" onClick={() => setAddOpen((v) => !v)}>
-          <Plus className="h-4 w-4 mr-1" /> Tambah
-        </Button>
+        <div className="flex gap-1.5">
+          {!selfAlreadyAdded && (
+            <Button size="sm" variant="outline" onClick={addSelf}>
+              <UserPlus className="h-4 w-4 mr-1" /> Tambah Saya
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setAddOpen((v) => !v)}>
+            <Plus className="h-4 w-4 mr-1" /> Tambah
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {addOpen && (
@@ -637,9 +686,16 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
 
         {participants.map((p) => (
           <div key={p.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{p.name}</p>
-              {p.contact && <p className="text-xs text-muted-foreground">{p.contact}</p>}
+            <div className="min-w-0 flex items-center gap-2">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium truncate">{p.name}</p>
+                  {p.id === ownerParticipantId && (
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">Saya</Badge>
+                  )}
+                </div>
+                {p.contact && <p className="text-xs text-muted-foreground">{p.contact}</p>}
+              </div>
             </div>
             <Button
               variant="ghost"
@@ -657,7 +713,7 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
   )
 }
 
-function BreakdownSection({ breakdowns, billTitle, billCreatedAt, participants, paymentInfo, mutations, onSynced }: { breakdowns: ParticipantBreakdown[]; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; paymentInfo: BillPaymentInfo | null; mutations: Mutations; onSynced: () => void }) {
+function BreakdownSection({ breakdowns, billTitle, billCreatedAt, participants, paymentInfo, mutations, ownerParticipantId, onSynced }: { breakdowns: ParticipantBreakdown[]; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; paymentInfo: BillPaymentInfo | null; mutations: Mutations; ownerParticipantId: string | null; onSynced: () => void }) {
   function buildWaText(b: ParticipantBreakdown) {
     const chargesTotal = b.chargeShares.reduce((s, c) => s + c.amount, 0)
     const hasItems = b.lineItems.length > 0
@@ -708,15 +764,18 @@ function BreakdownSection({ breakdowns, billTitle, billCreatedAt, participants, 
         )}
       </CardHeader>
       <CardContent className="space-y-3">
-        {breakdowns.map((b) => (
-          <BreakdownCard key={b.participantId} breakdown={b} buildWaText={buildWaText} mutations={mutations} billTitle={billTitle} billCreatedAt={billCreatedAt} participants={participants} onSynced={onSynced} />
-        ))}
+        {breakdowns
+          .slice()
+          .sort((a, b) => (a.participantId === ownerParticipantId ? -1 : b.participantId === ownerParticipantId ? 1 : 0))
+          .map((b) => (
+            <BreakdownCard key={b.participantId} breakdown={b} buildWaText={buildWaText} mutations={mutations} billTitle={billTitle} billCreatedAt={billCreatedAt} participants={participants} isOwner={b.participantId === ownerParticipantId} onSynced={onSynced} />
+          ))}
       </CardContent>
     </Card>
   )
 }
 
-function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreatedAt, participants, onSynced }: { breakdown: ParticipantBreakdown; buildWaText: (b: ParticipantBreakdown) => string; mutations: Mutations; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; onSynced: () => void }) {
+function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreatedAt, participants, isOwner, onSynced }: { breakdown: ParticipantBreakdown; buildWaText: (b: ParticipantBreakdown) => string; mutations: Mutations; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; isOwner: boolean; onSynced: () => void }) {
   const chargesTotal = breakdown.chargeShares.reduce((s, c) => s + c.amount, 0)
   const hasItems = breakdown.lineItems.length > 0
   const hasCharges = chargesTotal > 0
@@ -739,14 +798,15 @@ function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreat
     : `Bagi tagihan: ${billTitle}`
 
   return (
-    <div className="rounded-md border">
+    <div className={`rounded-md border${isOwner ? " border-primary/40 bg-primary/5" : ""}`}>
       <button
         className="w-full flex items-center justify-between gap-2 p-3 text-left"
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="font-medium text-sm">{breakdown.name}</p>
+            {isOwner && <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">Saya</Badge>}
             {breakdown.status === "paid" && (
               <Badge className="text-xs py-0 px-1.5 h-4 bg-green-600 hover:bg-green-600"><Check className="h-3 w-3 mr-0.5" />Lunas</Badge>
             )}
@@ -758,6 +818,21 @@ function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreat
           {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
         </div>
       </button>
+
+      {isOwner && !expanded && (
+        <div className="px-3 pb-3 -mt-1">
+          {participant?.transactionId ? (
+            <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+              <Check className="h-3 w-3" />
+              <span>Sudah dicatat ke transaksi</span>
+            </div>
+          ) : (
+            <Button size="sm" className="h-7 text-xs w-full" onClick={(e) => { e.stopPropagation(); setTxOpen(true) }}>
+              <Receipt className="h-3 w-3 mr-1" /> Catat Bagian Saya ke Transaksi
+            </Button>
+          )}
+        </div>
+      )}
 
       {expanded && (
         <div className="px-3 pb-3 space-y-3 border-t pt-3">
