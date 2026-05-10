@@ -1,7 +1,7 @@
 # MoneyNote — Product Overview
 
 > Dokumen ini diperbarui setiap ada update signifikan pada produk.  
-> **Versi terakhir:** Mei 2026
+> **Versi terakhir:** Mei 2026 (rev 2)
 
 ---
 
@@ -52,7 +52,11 @@ Cocok untuk makan bersama, patungan, atau tagihan grup:
 4. Aplikasi otomatis menghitung total per orang (termasuk service charge, pajak)
 5. Kirim rincian tagihan ke masing-masing orang via WhatsApp
 
+**Input item:** Masukkan harga asli dan diskon (opsional) — aplikasi otomatis menghitung harga bayar. Jadi tidak perlu hitung sendiri dulu sebelum input.
+
 **Fitur Sync:** Setelah split bill selesai, bagian kamu sendiri bisa langsung dicatat sebagai transaksi di aplikasi — jadi semua pengeluaran tetap terlacak dengan rapi.
+
+**Tambah Saya:** Bisa menambahkan diri sendiri sebagai peserta dengan satu klik — nama diambil otomatis dari akun yang login.
 
 ---
 
@@ -142,6 +146,11 @@ Beberapa pengaturan hanya bisa diubah oleh admin (pemilik aplikasi), bukan oleh 
 ---
 
 ## Riwayat Update
+
+### Mei 2026 (rev 2) — Perbaikan UX Split Bill
+- Input item split bill kini pakai harga asli + diskon → harga bayar dihitung otomatis
+- Siap: fitur "Tambah Saya" sebagai peserta split bill (shortcut satu klik)
+- Siap: toggle sinkronisasi tagihan ke transaksi yang lebih jelas per peserta
 
 ### Mei 2026 — OCR Transaksi & Split Bill Sync
 - Tombol tambah transaksi kini punya 3 pilihan: Manual, Gambar, atau Kamera
