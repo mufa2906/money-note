@@ -137,15 +137,19 @@ Beberapa pengaturan hanya bisa diubah oleh admin (pemilik aplikasi), bukan oleh 
 
 ## Fitur yang Direncanakan
 
-| Fitur | Keterangan |
-|-------|-----------|
-| WhatsApp Bot | Pencatatan via WhatsApp (untuk pengguna Premium) |
-| Auto Bank Sync | Tarik data mutasi bank/e-wallet secara otomatis |
-| Pengingat Split Bill | Pengingat otomatis ke teman yang belum bayar via chat |
+Tidak ada fitur besar yang direncanakan saat ini.
+
+> **WhatsApp Bot** — Tidak dilanjutkan. Butuh Meta Business API yang berbayar dan sulit diverifikasi untuk developer individu. Alternatif: tombol "Kirim WA" via deep link sudah tersedia di split bill.  
+> **Auto Bank Sync** — Tidak dilanjutkan. Semua penyedia Open Finance Indonesia (Brankas, Brick, dll) berbayar dan butuh entitas bisnis. Alternatif: import CSV dari m-banking sudah tersedia.
 
 ---
 
 ## Riwayat Update
+
+### Mei 2026 (rev 3) — Pengingat Split Bill Otomatis
+- Cron harian jam 9 pagi: notifikasi ke creator jika ada peserta unpaid > 3 hari
+- Notif via Telegram dan Web Push
+- Setelah notif: creator buka app → kirim ulang WA ke peserta via tombol yang sudah ada
 
 ### Mei 2026 (rev 2) — Perbaikan UX Split Bill
 - Input item split bill kini pakai harga asli + diskon → harga bayar dihitung otomatis
