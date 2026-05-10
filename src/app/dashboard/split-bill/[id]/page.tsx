@@ -21,7 +21,7 @@ import { AddTransactionModal } from "@/components/transactions/add-transaction-m
 
 interface Mutations {
   patchBill: (updates: { title?: string; description?: string | null; paymentInfo?: BillPaymentInfo | null; charges?: BillCharge[] }) => Promise<void>
-  addItem: (data: { name: string; price: number; qty: number }) => Promise<void>
+  addItem: (data: { name: string; price: number; qty: number; originalPrice?: number | null }) => Promise<void>
   updateItem: (itemId: string, updates: { name?: string; price?: number; originalPrice?: number | null; qty?: number; participantIds?: string[] }) => Promise<void>
   deleteItem: (itemId: string) => Promise<void>
   addParticipant: (data: { name: string; contact?: string }) => Promise<void>
@@ -58,7 +58,7 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
         ...prev,
         items: [
           ...prev.items,
-          { id: tempId, billId: id, name: data.name, price: data.price, originalPrice: null, qty: data.qty, position: prev.items.length, participantIds: [] },
+          { id: tempId, billId: id, name: data.name, price: data.price, originalPrice: data.originalPrice ?? null, qty: data.qty, position: prev.items.length, participantIds: [] },
         ],
       })
       const res = await fetch(`/api/bills/${id}/items`, {
@@ -296,16 +296,21 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
 function ItemsSection({ items, participants, mutations }: { items: BillItem[]; participants: BillParticipant[]; mutations: Mutations }) {
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState("")
-  const [price, setPrice] = useState("")
+  const [originalPrice, setOriginalPrice] = useState("")
+  const [discount, setDiscount] = useState("")
   const [qty, setQty] = useState("1")
 
   function reset() {
-    setName(""); setPrice(""); setQty("1"); setAddOpen(false)
+    setName(""); setOriginalPrice(""); setDiscount(""); setQty("1"); setAddOpen(false)
   }
 
   async function submit() {
-    if (!name.trim() || !price) return
-    await mutations.addItem({ name: name.trim(), price: Number(price), qty: Number(qty) || 1 })
+    if (!name.trim() || !originalPrice) return
+    const origNum = Number(originalPrice)
+    const discNum = Number(discount) || 0
+    const hasDiscount = discNum > 0 && discNum < origNum
+    const finalPrice = Math.max(0, origNum - discNum)
+    await mutations.addItem({ name: name.trim(), price: finalPrice, qty: Number(qty) || 1, originalPrice: hasDiscount ? origNum : null })
     reset()
   }
 
@@ -322,9 +327,15 @@ function ItemsSection({ items, participants, mutations }: { items: BillItem[]; p
           <div className="space-y-2 rounded-md border p-3 bg-muted/40">
             <Input placeholder="Nama menu" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             <div className="grid grid-cols-2 gap-2">
-              <AmountInput placeholder="Harga satuan" value={price} onChange={setPrice} />
+              <AmountInput placeholder="Harga asli" value={originalPrice} onChange={setOriginalPrice} />
               <Input type="number" min={1} placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
             </div>
+            <AmountInput placeholder="Diskon (opsional)" value={discount} onChange={setDiscount} />
+            {Number(discount) > 0 && Number(originalPrice) > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Harga bayar: <span className="font-medium text-foreground">{formatCurrency(Math.max(0, Number(originalPrice) - Number(discount)))}</span> per item
+              </p>
+            )}
             <div className="flex gap-2">
               <Button size="sm" onClick={submit} className="flex-1">Simpan</Button>
               <Button size="sm" variant="ghost" onClick={reset}>Batal</Button>
@@ -347,16 +358,16 @@ function ItemsSection({ items, participants, mutations }: { items: BillItem[]; p
 function ItemRow({ item, participants, mutations }: { item: BillItem; participants: BillParticipant[]; mutations: Mutations }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(item.name)
-  const [price, setPrice] = useState(String(item.price))
-  const [originalPrice, setOriginalPrice] = useState(item.originalPrice ? String(item.originalPrice) : "")
+  const [hargaAsli, setHargaAsli] = useState(item.originalPrice ? String(item.originalPrice) : String(item.price))
+  const [diskon, setDiskon] = useState(item.originalPrice ? String(item.originalPrice - item.price) : "")
   const [qty, setQty] = useState(String(item.qty))
   const [popoverOpen, setPopoverOpen] = useState(false)
 
   useEffect(() => {
     if (!editing) {
       setName(item.name)
-      setPrice(String(item.price))
-      setOriginalPrice(item.originalPrice ? String(item.originalPrice) : "")
+      setHargaAsli(item.originalPrice ? String(item.originalPrice) : String(item.price))
+      setDiskon(item.originalPrice ? String(item.originalPrice - item.price) : "")
       setQty(String(item.qty))
     }
   }, [item.name, item.price, item.originalPrice, item.qty, editing])
@@ -366,10 +377,11 @@ function ItemRow({ item, participants, mutations }: { item: BillItem; participan
   const hasDiscount = item.originalPrice != null && item.originalPrice > item.price
 
   async function save() {
-    const parsedOriginal = Number(originalPrice)
-    const parsedPrice = Number(price)
-    const op = Number.isFinite(parsedOriginal) && parsedOriginal > parsedPrice ? parsedOriginal : null
-    await mutations.updateItem(item.id, { name: name.trim(), price: parsedPrice, qty: Number(qty) || 1, originalPrice: op })
+    const origNum = Number(hargaAsli) || 0
+    const discNum = Number(diskon) || 0
+    const hasDiscount = discNum > 0 && discNum < origNum
+    const finalPrice = Math.max(0, origNum - discNum)
+    await mutations.updateItem(item.id, { name: name.trim(), price: finalPrice, qty: Number(qty) || 1, originalPrice: hasDiscount ? origNum : null })
     setEditing(false)
   }
 
@@ -386,19 +398,22 @@ function ItemRow({ item, participants, mutations }: { item: BillItem; participan
   }
 
   if (editing) {
+    const origNum = Number(hargaAsli) || 0
+    const discNum = Number(diskon) || 0
+    const finalPrice = Math.max(0, origNum - discNum)
     return (
       <div className="space-y-2 rounded-md border p-3 bg-muted/40">
         <Input placeholder="Nama menu" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        <div className="grid grid-cols-3 gap-2">
-          <AmountInput placeholder="Harga satuan" value={price} onChange={setPrice} />
-          <AmountInput placeholder="Harga asli (opsional)" value={originalPrice} onChange={setOriginalPrice} />
+        <div className="grid grid-cols-2 gap-2">
+          <AmountInput placeholder="Harga asli" value={hargaAsli} onChange={setHargaAsli} />
           <Input type="number" min={1} placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
         </div>
-        {originalPrice && Number(originalPrice) > 0 && (
+        <AmountInput placeholder="Diskon (opsional)" value={diskon} onChange={setDiskon} />
+        {discNum > 0 && origNum > 0 && (
           <p className="text-xs text-muted-foreground">
-            {Number(originalPrice) > Number(price)
-              ? `Diskon: -${formatCurrency((Number(originalPrice) - Number(price)) * (Number(qty) || 1))}`
-              : "Harga asli harus lebih besar dari harga satuan"}
+            {discNum < origNum
+              ? <>Harga bayar: <span className="font-medium text-foreground">{formatCurrency(finalPrice)}</span> per item</>
+              : "Diskon tidak boleh melebihi harga asli"}
           </p>
         )}
         <div className="flex gap-2">

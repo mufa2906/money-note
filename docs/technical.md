@@ -1,7 +1,7 @@
 # MoneyNote — Technical Reference
 
 > Dokumen ini untuk AI assistant dan developer. Baca sebelum mulai coding agar tidak salah asumsi.  
-> **Last updated:** 2026-05-10
+> **Last updated:** 2026-05-10 (rev 2)
 
 ---
 
@@ -220,10 +220,19 @@ InputMethodSheet dibuka
 
 Di halaman `/dashboard/split-bill/[id]`, setiap peserta breakdown punya tombol "Catat ke Transaksi":
 
-1. Klik → `AddTransactionModal` terbuka dengan `initialValues` pre-filled (amount dari breakdown, description "Bagi tagihan: [judul]", `billParticipantId`)
+1. Klik → `AddTransactionModal` terbuka dengan `initialValues` pre-filled (amount dari breakdown, description berisi daftar item, `billParticipantId`)
 2. User submit → POST /api/transactions dengan `billParticipantId`
 3. Handler otomatis update `bill_participant.transactionId = newTransaction.id`
-4. UI refresh → tombol berubah jadi "✓ Sudah dicatat"
+4. UI refresh → tombol berubah jadi "✓ Sudah dicatat ke transaksi"
+
+### Input Item Split Bill
+
+Form input item pakai pola: **harga asli + diskon → harga bayar (dihitung otomatis)**
+
+- `price` di DB = harga bayar = `originalPrice - discount`
+- `originalPrice` di DB = harga sebelum diskon (null jika tidak ada diskon)
+- Jika diskon = 0, `originalPrice` disimpan sebagai null
+- UI menampilkan `~~originalPrice~~ finalPrice` saat ada diskon
 
 ---
 
