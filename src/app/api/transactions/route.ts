@@ -22,8 +22,9 @@ async function ensureMigrations() {
   if (migrated) return
   await dbClient.execute(`ALTER TABLE "transaction" ADD COLUMN subcategory TEXT`).catch(() => {})
   await dbClient.execute(`ALTER TABLE budget ADD COLUMN subcategory TEXT`).catch(() => {})
-  // Backfill existing transactions with no subcategory → dll
   await dbClient.execute(`UPDATE "transaction" SET subcategory = 'dll' WHERE subcategory IS NULL`).catch(() => {})
+  await dbClient.execute(`ALTER TABLE "transaction" ADD COLUMN bill_participant_id TEXT`).catch(() => {})
+  await dbClient.execute(`ALTER TABLE bill_participant ADD COLUMN transaction_id TEXT`).catch(() => {})
   migrated = true
 }
 
