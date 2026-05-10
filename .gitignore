@@ -47,6 +47,9 @@ yarn-error.log*
 .claude/settings.json
 .claude/settings.local.json
 
+# internal docs (not for public repo)
+prd.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
