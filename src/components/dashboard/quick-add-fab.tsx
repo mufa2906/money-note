@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { AddTransactionModal } from "@/components/transactions/add-transaction-modal"
+import { InputMethodSheet } from "@/components/transactions/input-method-sheet"
 
 export function QuickAddFab() {
   const [open, setOpen] = useState(false)
@@ -16,7 +16,7 @@ export function QuickAddFab() {
       >
         <Plus className="h-6 w-6" />
       </Button>
-      <AddTransactionModal open={open} onOpenChange={setOpen} />
+      <InputMethodSheet open={open} onOpenChange={setOpen} />
     </>
   )
 }

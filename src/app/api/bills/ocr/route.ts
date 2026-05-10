@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api-auth"
-
-const GEMINI_MODEL = "gemini-2.5-flash"
-const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+import { callGeminiVision } from "@/lib/gemini"
 
 const PROMPT = `Kamu adalah asisten yang membaca foto struk pembelian (Indonesia). Ekstrak data dari struk dan kembalikan HANYA JSON valid (tanpa markdown, tanpa penjelasan) dengan format:
 {
@@ -34,42 +32,16 @@ export async function POST(request: NextRequest) {
   const { error } = await requireAuth(request)
   if (error) return error
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 })
-
   const body = await request.json().catch(() => null)
   const image = typeof body?.image === "string" ? body.image : null
   const mimeType = typeof body?.mimeType === "string" && body.mimeType.startsWith("image/") ? body.mimeType : "image/jpeg"
   if (!image) return NextResponse.json({ error: "image required (base64)" }, { status: 400 })
 
-  const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: PROMPT },
-            { inlineData: { mimeType, data: image } },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-      },
-    }),
-  })
-
-  if (!res.ok) {
-    const errBody = await res.text()
-    console.error("Gemini OCR failed:", res.status, errBody)
-    return NextResponse.json({ error: "OCR gagal. Coba foto yang lebih jelas." }, { status: 502 })
-  }
-
-  const data = await res.json()
-  const textPart = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (typeof textPart !== "string") {
+  let textPart: string
+  try {
+    textPart = await callGeminiVision(PROMPT, image, mimeType)
+  } catch (e) {
+    console.error("Gemini bills OCR failed:", e)
     return NextResponse.json({ error: "OCR gagal. Coba foto yang lebih jelas." }, { status: 502 })
   }
 
