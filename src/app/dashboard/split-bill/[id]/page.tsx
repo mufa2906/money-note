@@ -719,6 +719,10 @@ function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreat
     window.open(`https://wa.me/${phone}?text=${text}`, "_blank")
   }
 
+  const itemDesc = breakdown.lineItems.length > 0
+    ? breakdown.lineItems.map((li) => `${li.name} - ${formatCurrency(li.share)}`).join(", ")
+    : `Bagi tagihan: ${billTitle}`
+
   return (
     <div className="rounded-md border">
       <button
@@ -807,7 +811,7 @@ function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreat
         onOpenChange={setTxOpen}
         initialValues={{
           amount: String(Math.round(breakdown.total)),
-          description: `Bagi tagihan: ${billTitle}`,
+          description: itemDesc,
           type: "expense",
           date: new Date(billCreatedAt),
           billParticipantId: breakdown.participantId,
