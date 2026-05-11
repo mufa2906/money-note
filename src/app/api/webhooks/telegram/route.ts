@@ -187,7 +187,7 @@ function detectCategoryKeyword(description: string, type: "income" | "expense"):
 const GEMINI_MODEL = "gemini-2.5-flash"
 const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
-async function callGemini(prompt: string): Promise<string | null> {
+async function callGemini(prompt: string, maxOutputTokens = 200): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return null
   try {
@@ -196,7 +196,7 @@ async function callGemini(prompt: string): Promise<string | null> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+        generationConfig: { temperature: 0.1, maxOutputTokens },
       }),
     })
     if (!res.ok) return null
@@ -214,7 +214,7 @@ Deskripsi: "${description}"
 Tipe: ${type === "income" ? "pemasukan" : "pengeluaran"}
 Pilih SATU dari: makanan, transportasi, belanja, hiburan, tagihan, kesehatan, pendidikan, gaji, lainnya
 Balas HANYA nama kategori, tanpa penjelasan.`
-  const result = await callGemini(prompt)
+  const result = await callGemini(prompt, 10)
   if (!result) return fallback
   const valid = ["makanan", "transportasi", "belanja", "hiburan", "tagihan", "kesehatan", "pendidikan", "gaji", "lainnya"]
   const clean = result.toLowerCase().trim().split(/\s+/)[0]
