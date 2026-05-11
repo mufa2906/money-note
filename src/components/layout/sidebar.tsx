@@ -16,18 +16,33 @@ import { ThemeToggle } from "./theme-toggle"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { signOut } from "@/lib/auth-client"
 
-const NAV = [
-  { href: "/dashboard", label: "Beranda", icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/transactions", label: "Transaksi", icon: ArrowLeftRight },
-  { href: "/dashboard/accounts", label: "Akun", icon: Wallet },
-  { href: "/dashboard/categories", label: "Kategori", icon: Tag },
-  { href: "/dashboard/split-bill", label: "Bagi Tagihan", icon: Users },
-  { href: "/dashboard/budget", label: "Budget", icon: PiggyBank },
-  { href: "/dashboard/insights", label: "Wawasan", icon: Sparkles },
-  { href: "/dashboard/integrations", label: "Integrasi Bot", icon: Bot },
-  { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
-  { href: "/dashboard/upgrade", label: "Upgrade", icon: Crown },
-  { href: "/dashboard/settings", label: "Pengaturan", icon: Settings },
+const NAV_GROUPS = [
+  {
+    label: "Utama",
+    items: [
+      { href: "/dashboard", label: "Beranda", icon: LayoutDashboard, exact: true },
+      { href: "/dashboard/transactions", label: "Transaksi", icon: ArrowLeftRight },
+      { href: "/dashboard/accounts", label: "Akun", icon: Wallet },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { href: "/dashboard/split-bill", label: "Bagi Tagihan", icon: Users },
+      { href: "/dashboard/budget", label: "Budget", icon: PiggyBank },
+      { href: "/dashboard/insights", label: "Wawasan", icon: Sparkles },
+      { href: "/dashboard/categories", label: "Kategori", icon: Tag },
+    ],
+  },
+  {
+    label: "Akun & Lainnya",
+    items: [
+      { href: "/dashboard/integrations", label: "Integrasi Bot", icon: Bot },
+      { href: "/dashboard/notifications", label: "Notifikasi", icon: Bell },
+      { href: "/dashboard/upgrade", label: "Upgrade", icon: Crown },
+      { href: "/dashboard/settings", label: "Pengaturan", icon: Settings },
+    ],
+  },
 ]
 
 export function Sidebar() {
@@ -56,24 +71,34 @@ export function Sidebar() {
       </div>
 
       <ScrollArea className="flex-1 py-3">
-        <nav className="space-y-0.5 px-2">
-          {NAV.map(({ href, label, icon: Icon, exact }) => (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                isActive(href, exact)
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4 flex-shrink-0" />
-              <span>{label}</span>
-              {href === "/dashboard/upgrade" && user?.subscriptionTier === "free" && (
-                <Badge variant="secondary" className="ml-auto text-xs py-0 px-1.5">Free</Badge>
-              )}
-            </Link>
+        <nav className="px-2 space-y-4">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={group.label}>
+              {gi > 0 && <Separator className="mb-3" />}
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map(({ href, label, icon: Icon, exact }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                      isActive(href, exact)
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    <span>{label}</span>
+                    {href === "/dashboard/upgrade" && user?.subscriptionTier === "free" && (
+                      <Badge variant="secondary" className="ml-auto text-xs py-0 px-1.5">Free</Badge>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
       </ScrollArea>
