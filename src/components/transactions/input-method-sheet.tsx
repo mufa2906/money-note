@@ -2,13 +2,14 @@
 
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Pencil, Image, Camera, Receipt, Users, Loader2 } from "lucide-react"
+import { Pencil, Image, Camera, Receipt, Users, Loader2, MessageSquare } from "lucide-react"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/lib/hooks/use-toast"
 import { useAiStatus } from "@/lib/hooks/use-ai-status"
 import { AddTransactionModal, type TransactionInitialValues } from "@/components/transactions/add-transaction-modal"
+import { QuickCaptureSheet } from "@/components/transactions/quick-capture-sheet"
 
 type Mode = "idle" | "choosing-type" | "ocr-loading" | "transaction-review"
 
@@ -28,6 +29,7 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
   const [capturedImage, setCapturedImage] = useState<{ base64: string; mimeType: string } | null>(null)
   const [ocrValues, setOcrValues] = useState<TransactionInitialValues | undefined>(undefined)
   const [txModalOpen, setTxModalOpen] = useState(false)
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false)
 
   function reset() {
     setMode("idle")
@@ -177,7 +179,17 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
           <DrawerHeader>
             <DrawerTitle>Catat Transaksi</DrawerTitle>
           </DrawerHeader>
-          <div className="grid grid-cols-3 gap-3 px-4 pb-8 pt-2">
+          <div className="grid grid-cols-2 gap-3 px-4 pb-8 pt-2">
+            <button
+              onClick={() => { handleClose(); setQuickCaptureOpen(true) }}
+              className="flex flex-col items-center gap-2 rounded-xl border p-4 hover:bg-accent transition-colors"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <MessageSquare className="h-5 w-5 text-primary" />
+              </div>
+              <span className="text-xs font-medium">Ketik</span>
+              <span className="text-[10px] text-muted-foreground leading-none">AI parse otomatis</span>
+            </button>
             <button
               onClick={() => { handleClose(); setOcrValues(undefined); setTxModalOpen(true) }}
               className="flex flex-col items-center gap-2 rounded-xl border p-4 hover:bg-accent transition-colors"
@@ -186,6 +198,7 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
                 <Pencil className="h-5 w-5 text-primary" />
               </div>
               <span className="text-xs font-medium">Manual</span>
+              <span className="text-[10px] text-muted-foreground leading-none">isi form langsung</span>
             </button>
             <button
               onClick={() => fileRef.current?.click()}
@@ -195,7 +208,7 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
                 <Image className="h-5 w-5 text-primary" />
               </div>
               <span className="text-xs font-medium">Gambar</span>
-              {!aiAvailable && <span className="text-[10px] text-muted-foreground leading-none">manual</span>}
+              <span className="text-[10px] text-muted-foreground leading-none">{aiAvailable ? "scan struk" : "manual"}</span>
             </button>
             <button
               onClick={() => cameraRef.current?.click()}
@@ -205,7 +218,7 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
                 <Camera className="h-5 w-5 text-primary" />
               </div>
               <span className="text-xs font-medium">Kamera</span>
-              {!aiAvailable && <span className="text-[10px] text-muted-foreground leading-none">manual</span>}
+              <span className="text-[10px] text-muted-foreground leading-none">{aiAvailable ? "foto langsung" : "manual"}</span>
             </button>
           </div>
         </DrawerContent>
@@ -269,6 +282,8 @@ export function InputMethodSheet({ open, onOpenChange }: Props) {
         }}
         initialValues={ocrValues}
       />
+
+      <QuickCaptureSheet open={quickCaptureOpen} onOpenChange={setQuickCaptureOpen} />
     </>
   )
 }

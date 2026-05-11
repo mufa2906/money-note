@@ -36,13 +36,13 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export interface TransactionInitialValues {
+  type?: "income" | "expense"
   amount?: string
+  category?: string
+  walletAccountId?: string
   description?: string
   date?: Date
-  category?: string
-  type?: "income" | "expense"
   billParticipantId?: string
-  walletAccountId?: string
 }
 
 interface AddTransactionModalProps {
