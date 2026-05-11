@@ -5,6 +5,7 @@ import { CategorySummary } from "@/components/dashboard/category-summary"
 import { QuickAddFab } from "@/components/dashboard/quick-add-fab"
 import { PremiumActiveCard } from "@/components/dashboard/premium-active-card"
 import { BudgetSummary } from "@/components/dashboard/budget-summary"
+import { SafeToSpendCard } from "@/components/dashboard/safe-to-spend-card"
 
 export default function DashboardPage() {
   return (
@@ -15,6 +16,7 @@ export default function DashboardPage() {
           <p className="text-sm text-muted-foreground">Selamat datang kembali!</p>
         </div>
         <BalanceCard />
+        <SafeToSpendCard />
         <PremiumActiveCard />
         <BudgetSummary />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

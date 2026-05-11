@@ -105,6 +105,22 @@ export default function InsightsPage() {
     return [...dayTotals].sort((a, b) => b.total - a.total)[0]
   }, [dayTotals])
 
+  // Hour-of-day spending pattern (uses createdAt timestamp)
+  const hourTotals = useMemo(() => {
+    const totals = Array(24).fill(0)
+    thisTxs.filter((t) => t.type === "expense" && t.createdAt).forEach((t) => {
+      const hour = new Date(t.createdAt).getHours()
+      totals[hour] += t.amount
+    })
+    return totals.map((total, i) => ({ hour: i, total }))
+  }, [thisTxs])
+
+  const peakHour = useMemo(() => {
+    return [...hourTotals].sort((a, b) => b.total - a.total).find((h) => h.total > 0)
+  }, [hourTotals])
+
+  const maxHourTotal = useMemo(() => Math.max(...hourTotals.map((h) => h.total), 1), [hourTotals])
+
   // Net balance this month
   const netThis = thisIncome - thisExpense
   const netLast = lastIncome - lastExpense
@@ -242,6 +258,43 @@ export default function InsightsPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Hour-of-day spending pattern */}
+      {!loading && peakHour && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <span>Pola Belanja per Jam</span>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Jam paling boros: <span className="font-semibold text-foreground">{String(peakHour.hour).padStart(2, "0")}:00–{String(peakHour.hour).padStart(2, "0")}:59</span> · {formatCurrency(peakHour.total)}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-end gap-0.5 h-16">
+              {hourTotals.map(({ hour, total }) => (
+                <div key={hour} className="flex-1 flex flex-col items-center gap-0.5 group">
+                  <div
+                    className="w-full rounded-sm transition-all"
+                    style={{
+                      height: `${(total / maxHourTotal) * 100}%`,
+                      minHeight: total > 0 ? "2px" : "0px",
+                      background: hour === peakHour?.hour ? "hsl(var(--primary))" : "hsl(var(--muted-foreground)/0.3)",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+              <span>00</span>
+              <span>06</span>
+              <span>12</span>
+              <span>18</span>
+              <span>23</span>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Top categories this month */}

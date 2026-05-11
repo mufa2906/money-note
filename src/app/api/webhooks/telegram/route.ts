@@ -85,7 +85,7 @@ async function handleCommand(chatId: number, text: string): Promise<string | nul
     case "/help":
       return helpMessage()
     default:
-      return ["Perintah tidak dikenal.", helpMessage()].join("\n\n")
+      return handleFreeText(linked.id, text)
   }
 }
 
@@ -99,6 +99,10 @@ function helpMessage(): string {
     "<code>/ringkasan</code> — ringkasan bulan ini",
     "<code>/tagihan</code> — daftar bagi tagihan belum lunas",
     "<code>/bantuan</code> — tampilkan pesan ini",
+    "",
+    "💬 <b>Tanya bebas!</b> Ketik pertanyaan langsung, misal:",
+    "<i>\"Berapa pengeluaranku minggu ini?\"</i>",
+    "<i>\"Kategori terbesar bulan ini apa?\"</i>",
   ].join("\n")
 }
 
@@ -172,12 +176,89 @@ const KEYWORD_CATEGORY: Array<[string[], string]> = [
   [["gaji", "salary", "bonus", "tunjangan", "freelance", "proyek", "komisi"], "gaji"],
 ]
 
-function detectCategory(description: string, type: "income" | "expense"): string {
+function detectCategoryKeyword(description: string, type: "income" | "expense"): string {
   const lower = description.toLowerCase()
   for (const [keywords, cat] of KEYWORD_CATEGORY) {
     if (keywords.some((k) => lower.includes(k))) return cat
   }
   return type === "income" ? "gaji" : "lainnya"
+}
+
+const GEMINI_MODEL = "gemini-2.5-flash"
+const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+
+async function callGemini(prompt: string): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return null
+  try {
+    const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 200 },
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null
+  } catch {
+    return null
+  }
+}
+
+async function detectCategory(description: string, type: "income" | "expense"): Promise<string> {
+  const fallback = detectCategoryKeyword(description, type)
+  const prompt = `Klasifikasikan transaksi keuangan berikut ke satu kategori.
+Deskripsi: "${description}"
+Tipe: ${type === "income" ? "pemasukan" : "pengeluaran"}
+Pilih SATU dari: makanan, transportasi, belanja, hiburan, tagihan, kesehatan, pendidikan, gaji, lainnya
+Balas HANYA nama kategori, tanpa penjelasan.`
+  const result = await callGemini(prompt)
+  if (!result) return fallback
+  const valid = ["makanan", "transportasi", "belanja", "hiburan", "tagihan", "kesehatan", "pendidikan", "gaji", "lainnya"]
+  const clean = result.toLowerCase().trim().split(/\s+/)[0]
+  return valid.includes(clean) ? clean : fallback
+}
+
+async function handleFreeText(userId: string, text: string): Promise<string> {
+  // Fetch context: last 30 transactions this month
+  const now = new Date()
+  const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  const recentTxs = await db
+    .select()
+    .from(transaction)
+    .where(and(eq(transaction.userId, userId), gte(transaction.transactionDate, `${monthStr}-01`)))
+    .orderBy(desc(transaction.transactionDate))
+    .limit(30)
+
+  const accounts = await db.select().from(walletAccount).where(eq(walletAccount.userId, userId))
+  const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
+  const income = recentTxs.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0)
+  const expense = recentTxs.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0)
+
+  const txSummary = recentTxs.slice(0, 10).map((t) =>
+    `- ${t.transactionDate}: ${t.type === "income" ? "+" : "-"}${formatCurrency(t.amount)} ${t.category} (${t.description})`
+  ).join("\n")
+
+  const prompt = `Kamu adalah asisten keuangan pribadi MoneyNote yang ramah. Jawab pertanyaan pengguna berdasarkan data keuangan mereka.
+
+Data keuangan bulan ini (${monthStr}):
+- Total saldo semua akun: ${formatCurrency(totalBalance)}
+- Pemasukan bulan ini: ${formatCurrency(income)}
+- Pengeluaran bulan ini: ${formatCurrency(expense)}
+- Sisa: ${formatCurrency(income - expense)}
+
+10 transaksi terakhir:
+${txSummary || "Belum ada transaksi bulan ini."}
+
+Pertanyaan pengguna: "${text}"
+
+Jawab dalam Bahasa Indonesia, singkat (maks 3 kalimat), natural, dan gunakan angka Rupiah yang spesifik jika relevan.
+Jangan gunakan markdown/HTML. Jika tidak bisa dijawab dari data, katakan dengan jujur.`
+
+  const result = await callGemini(prompt)
+  return result ?? "Maaf, AI sementara tidak tersedia. Gunakan perintah /saldo atau /ringkasan untuk cek keuanganmu."
 }
 
 interface TelegramPending {
@@ -358,7 +439,7 @@ async function handleRecord(userId: string, chatId: number, args: string): Promi
     ].join("\n")
   }
 
-  const autoCategory = detectCategory(description, type)
+  const autoCategory = await detectCategory(description, type)
   const pending: TelegramPending = {
     step: "select_account",
     type,
@@ -457,7 +538,7 @@ async function handleCallback(cb: NonNullable<TelegramUpdate["callback_query"]>)
       .set({ telegramPending: JSON.stringify(updatedPending), updatedAt: new Date() })
       .where(eq(user.id, linked.id))
 
-    const highlighted = pending.autoCategory ?? detectCategory(pending.description, pending.type)
+    const highlighted = pending.autoCategory ?? await detectCategory(pending.description, pending.type)
     const header = pending.type === "income"
       ? `Pemasukan <b>${formatCurrency(pending.amount)}</b>`
       : `Pengeluaran <b>${formatCurrency(pending.amount)}</b>`
