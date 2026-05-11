@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -35,13 +35,23 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+export interface TransactionInitialValues {
+  type?: "income" | "expense"
+  amount?: string
+  category?: string
+  walletAccountId?: string
+  description?: string
+  date?: Date
+}
+
 interface AddTransactionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
+  initialValues?: TransactionInitialValues
 }
 
-export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransactionModalProps) {
+export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValues }: AddTransactionModalProps) {
   const { toast } = useToast()
   const { accounts, refetch: refetchAccounts } = useAccounts()
   const { refetch: refetchTransactions } = useTransactions()
@@ -57,6 +67,19 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess }: AddTransa
     resolver: zodResolver(schema),
     defaultValues: { type: "expense", date: new Date() },
   })
+
+  useEffect(() => {
+    if (open && initialValues) {
+      form.reset({
+        type: initialValues.type ?? "expense",
+        amount: initialValues.amount ?? "",
+        category: initialValues.category ?? "",
+        walletAccountId: initialValues.walletAccountId ?? "",
+        description: initialValues.description ?? "",
+        date: initialValues.date ?? new Date(),
+      })
+    }
+  }, [open, initialValues, form])
 
   const transactionType = form.watch("type")
   const selectedCategory = form.watch("category")

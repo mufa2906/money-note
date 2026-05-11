@@ -174,6 +174,17 @@ export const budget = sqliteTable("budget", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 })
 
+export const recurringTemplate = sqliteTable("recurring_template", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  amount: real("amount").notNull(),
+  category: text("category").notNull(),
+  walletAccountId: text("wallet_account_id").notNull(),
+  dayOfMonth: integer("day_of_month"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+})
+
 export const subscription = sqliteTable("subscription", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
