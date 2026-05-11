@@ -42,6 +42,7 @@ export interface TransactionInitialValues {
   walletAccountId?: string
   description?: string
   date?: Date
+  billParticipantId?: string
 }
 
 interface AddTransactionModalProps {
@@ -69,17 +70,19 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
   })
 
   useEffect(() => {
-    if (open && initialValues) {
+    if (open) {
+      const defaultAccount = initialValues?.walletAccountId ?? (initialValues ? (accounts[0]?.id ?? "") : "")
       form.reset({
-        type: initialValues.type ?? "expense",
-        amount: initialValues.amount ?? "",
-        category: initialValues.category ?? "",
-        walletAccountId: initialValues.walletAccountId ?? "",
-        description: initialValues.description ?? "",
-        date: initialValues.date ?? new Date(),
+        type: initialValues?.type ?? "expense",
+        amount: initialValues?.amount ?? "",
+        description: initialValues?.description ?? "",
+        category: initialValues?.category ?? "",
+        date: initialValues?.date ?? new Date(),
+        walletAccountId: defaultAccount,
       })
+      setSelectedSubcategory(null)
     }
-  }, [open, initialValues, form])
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const transactionType = form.watch("type")
   const selectedCategory = form.watch("category")
@@ -99,7 +102,8 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
           subcategory: selectedSubcategory ?? null,
           description: data.description,
           transactionDate: format(data.date, "yyyy-MM-dd"),
-          source: "manual",
+          source: initialValues?.billParticipantId ? "split_bill" : "manual",
+          billParticipantId: initialValues?.billParticipantId ?? null,
         }),
       })
 
@@ -109,8 +113,6 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
         title: "Transaksi dicatat!",
         description: `${data.description} berhasil disimpan.`,
       })
-      form.reset({ type: "expense", date: new Date() })
-      setSelectedSubcategory(null)
       onOpenChange(false)
       await Promise.all([refetchTransactions(), refetchAccounts(), refetchNotifications()])
       onSuccess?.()
@@ -162,7 +164,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
 
           <div className="space-y-1">
             <Label>Kategori</Label>
-            <Select onValueChange={(v) => { form.setValue("category", v); setSelectedSubcategory(null) }}>
+            <Select value={form.watch("category")} onValueChange={(v) => { form.setValue("category", v); setSelectedSubcategory(null) }}>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
@@ -195,7 +197,7 @@ export function AddTransactionModal({ open, onOpenChange, onSuccess, initialValu
 
           <div className="space-y-1">
             <Label>Akun</Label>
-            <Select onValueChange={(v) => form.setValue("walletAccountId", v)}>
+            <Select value={form.watch("walletAccountId")} onValueChange={(v) => form.setValue("walletAccountId", v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih akun" />
               </SelectTrigger>

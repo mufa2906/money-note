@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api-auth"
-
-const GEMINI_MODEL = "gemini-2.5-flash"
-const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+import { extractOcrImage, callGeminiOcr } from "@/lib/gemini"
 
 const PROMPT = `Kamu adalah asisten yang membaca foto struk pembelian (Indonesia). Ekstrak data dari struk dan kembalikan HANYA JSON valid (tanpa markdown, tanpa penjelasan) dengan format:
 {
@@ -34,53 +32,14 @@ export async function POST(request: NextRequest) {
   const { error } = await requireAuth(request)
   if (error) return error
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 })
-
   const body = await request.json().catch(() => null)
-  const image = typeof body?.image === "string" ? body.image : null
-  const mimeType = typeof body?.mimeType === "string" && body.mimeType.startsWith("image/") ? body.mimeType : "image/jpeg"
-  if (!image) return NextResponse.json({ error: "image required (base64)" }, { status: 400 })
+  const img = extractOcrImage(body)
+  if (!img) return NextResponse.json({ error: "image required (base64)" }, { status: 400 })
 
-  const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: PROMPT },
-            { inlineData: { mimeType, data: image } },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-      },
-    }),
-  })
+  const result = await callGeminiOcr(PROMPT, img.image, img.mimeType, "Gemini bills")
+  if (!result.ok) return result.response
 
-  if (!res.ok) {
-    const errBody = await res.text()
-    console.error("Gemini OCR failed:", res.status, errBody)
-    return NextResponse.json({ error: "OCR gagal. Coba foto yang lebih jelas." }, { status: 502 })
-  }
-
-  const data = await res.json()
-  const textPart = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (typeof textPart !== "string") {
-    return NextResponse.json({ error: "OCR gagal. Coba foto yang lebih jelas." }, { status: 502 })
-  }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(textPart)
-  } catch {
-    return NextResponse.json({ error: "Gagal parse hasil OCR." }, { status: 502 })
-  }
-
-  const p = parsed as Record<string, unknown>
+  const p = result.data as Record<string, unknown>
   const items = Array.isArray(p?.items)
     ? p.items
         .map((i: unknown) => {

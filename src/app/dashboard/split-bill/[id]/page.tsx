@@ -2,7 +2,8 @@
 
 import { use, useState, useMemo, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X, Coins, CreditCard, ChevronDown, ChevronUp, Send } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, MessageCircle, Check, Receipt, Users, Pencil, X, Coins, CreditCard, ChevronDown, ChevronUp, Send, UserPlus } from "lucide-react"
+import { useAuth } from "@/providers/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,13 +18,14 @@ import { formatCurrency } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { BillItem, BillParticipant, BillCharge, BillPaymentInfo, ParticipantBreakdown, SplitStatus } from "@/types"
+import { AddTransactionModal } from "@/components/transactions/add-transaction-modal"
 
 interface Mutations {
   patchBill: (updates: { title?: string; description?: string | null; paymentInfo?: BillPaymentInfo | null; charges?: BillCharge[] }) => Promise<void>
-  addItem: (data: { name: string; price: number; qty: number }) => Promise<void>
+  addItem: (data: { name: string; price: number; qty: number; originalPrice?: number | null }) => Promise<void>
   updateItem: (itemId: string, updates: { name?: string; price?: number; originalPrice?: number | null; qty?: number; participantIds?: string[] }) => Promise<void>
   deleteItem: (itemId: string) => Promise<void>
-  addParticipant: (data: { name: string; contact?: string }) => Promise<void>
+  addParticipant: (data: { name: string; contact?: string }) => Promise<string | null>
   updateParticipant: (pid: string, updates: { status?: SplitStatus }) => Promise<void>
   deleteParticipant: (pid: string) => Promise<void>
 }
@@ -32,8 +34,26 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params)
   const { bill, loading, refetch, setBill } = useBill(id)
   const { toast } = useToast()
+  const { user } = useAuth()
   const [titleEdit, setTitleEdit] = useState<string | null>(null)
   const [descEdit, setDescEdit] = useState<string | null>(null)
+  const [ownerParticipantId, setOwnerParticipantIdState] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null
+    return localStorage.getItem(`bill-owner-${id}`) ?? null
+  })
+
+  function setOwnerParticipantId(pid: string | null) {
+    setOwnerParticipantIdState(pid)
+    if (pid) localStorage.setItem(`bill-owner-${id}`, pid)
+    else localStorage.removeItem(`bill-owner-${id}`)
+  }
+
+  useEffect(() => {
+    if (bill && ownerParticipantId) {
+      const stillExists = bill.participants.some((p) => p.id === ownerParticipantId)
+      if (!stillExists) setOwnerParticipantId(null)
+    }
+  }, [bill?.participants, ownerParticipantId])
 
   const breakdowns = useMemo(() => (bill ? computeBreakdown(bill) : []), [bill])
 
@@ -57,7 +77,7 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
         ...prev,
         items: [
           ...prev.items,
-          { id: tempId, billId: id, name: data.name, price: data.price, originalPrice: null, qty: data.qty, position: prev.items.length, participantIds: [] },
+          { id: tempId, billId: id, name: data.name, price: data.price, originalPrice: data.originalPrice ?? null, qty: data.qty, position: prev.items.length, participantIds: [] },
         ],
       })
       const res = await fetch(`/api/bills/${id}/items`, {
@@ -138,10 +158,11 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
       if (!res.ok) {
         setBill((prev) => prev && { ...prev, participants: prev.participants.filter((p) => p.id !== tempId) })
         toast({ title: "Gagal tambah peserta", variant: "destructive" })
-        return
+        return null
       }
       const created = await res.json()
       setBill((prev) => prev && { ...prev, participants: prev.participants.map((p) => p.id === tempId ? created : p) })
+      return created.id as string
     },
 
     async updateParticipant(pid, updates) {
@@ -274,11 +295,26 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
 
       <ItemsSection items={bill.items} participants={bill.participants} mutations={mutations} />
       <ChargesSection charges={bill.charges} mutations={mutations} />
-      <ParticipantsSection participants={bill.participants} mutations={mutations} />
+      <ParticipantsSection
+        participants={bill.participants}
+        mutations={mutations}
+        userName={user?.name ?? "Saya"}
+        ownerParticipantId={ownerParticipantId}
+        onSetOwner={setOwnerParticipantId}
+      />
       <PaymentInfoSection paymentInfo={bill.paymentInfo} mutations={mutations} />
 
       {breakdowns.length > 0 && (
-        <BreakdownSection breakdowns={breakdowns} billTitle={bill.title} paymentInfo={bill.paymentInfo} mutations={mutations} />
+        <BreakdownSection
+          breakdowns={breakdowns}
+          billTitle={bill.title}
+          billCreatedAt={bill.createdAt}
+          participants={bill.participants}
+          paymentInfo={bill.paymentInfo}
+          mutations={mutations}
+          ownerParticipantId={ownerParticipantId}
+          onSynced={refetch}
+        />
       )}
     </div>
   )
@@ -287,16 +323,21 @@ export default function BillEditorPage({ params }: { params: Promise<{ id: strin
 function ItemsSection({ items, participants, mutations }: { items: BillItem[]; participants: BillParticipant[]; mutations: Mutations }) {
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState("")
-  const [price, setPrice] = useState("")
+  const [originalPrice, setOriginalPrice] = useState("")
+  const [discount, setDiscount] = useState("")
   const [qty, setQty] = useState("1")
 
   function reset() {
-    setName(""); setPrice(""); setQty("1"); setAddOpen(false)
+    setName(""); setOriginalPrice(""); setDiscount(""); setQty("1"); setAddOpen(false)
   }
 
   async function submit() {
-    if (!name.trim() || !price) return
-    await mutations.addItem({ name: name.trim(), price: Number(price), qty: Number(qty) || 1 })
+    if (!name.trim() || !originalPrice) return
+    const origNum = Number(originalPrice)
+    const discNum = Number(discount) || 0
+    const hasDiscount = discNum > 0 && discNum < origNum
+    const finalPrice = Math.max(0, origNum - discNum)
+    await mutations.addItem({ name: name.trim(), price: finalPrice, qty: Number(qty) || 1, originalPrice: hasDiscount ? origNum : null })
     reset()
   }
 
@@ -313,9 +354,15 @@ function ItemsSection({ items, participants, mutations }: { items: BillItem[]; p
           <div className="space-y-2 rounded-md border p-3 bg-muted/40">
             <Input placeholder="Nama menu" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
             <div className="grid grid-cols-2 gap-2">
-              <AmountInput placeholder="Harga satuan" value={price} onChange={setPrice} />
+              <AmountInput placeholder="Harga asli" value={originalPrice} onChange={setOriginalPrice} />
               <Input type="number" min={1} placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
             </div>
+            <AmountInput placeholder="Diskon (opsional)" value={discount} onChange={setDiscount} />
+            {Number(discount) > 0 && Number(originalPrice) > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Harga bayar: <span className="font-medium text-foreground">{formatCurrency(Math.max(0, Number(originalPrice) - Number(discount)))}</span> per item
+              </p>
+            )}
             <div className="flex gap-2">
               <Button size="sm" onClick={submit} className="flex-1">Simpan</Button>
               <Button size="sm" variant="ghost" onClick={reset}>Batal</Button>
@@ -338,16 +385,16 @@ function ItemsSection({ items, participants, mutations }: { items: BillItem[]; p
 function ItemRow({ item, participants, mutations }: { item: BillItem; participants: BillParticipant[]; mutations: Mutations }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(item.name)
-  const [price, setPrice] = useState(String(item.price))
-  const [originalPrice, setOriginalPrice] = useState(item.originalPrice ? String(item.originalPrice) : "")
+  const [hargaAsli, setHargaAsli] = useState(item.originalPrice ? String(item.originalPrice) : String(item.price))
+  const [diskon, setDiskon] = useState(item.originalPrice ? String(item.originalPrice - item.price) : "")
   const [qty, setQty] = useState(String(item.qty))
   const [popoverOpen, setPopoverOpen] = useState(false)
 
   useEffect(() => {
     if (!editing) {
       setName(item.name)
-      setPrice(String(item.price))
-      setOriginalPrice(item.originalPrice ? String(item.originalPrice) : "")
+      setHargaAsli(item.originalPrice ? String(item.originalPrice) : String(item.price))
+      setDiskon(item.originalPrice ? String(item.originalPrice - item.price) : "")
       setQty(String(item.qty))
     }
   }, [item.name, item.price, item.originalPrice, item.qty, editing])
@@ -357,10 +404,11 @@ function ItemRow({ item, participants, mutations }: { item: BillItem; participan
   const hasDiscount = item.originalPrice != null && item.originalPrice > item.price
 
   async function save() {
-    const parsedOriginal = Number(originalPrice)
-    const parsedPrice = Number(price)
-    const op = Number.isFinite(parsedOriginal) && parsedOriginal > parsedPrice ? parsedOriginal : null
-    await mutations.updateItem(item.id, { name: name.trim(), price: parsedPrice, qty: Number(qty) || 1, originalPrice: op })
+    const origNum = Number(hargaAsli) || 0
+    const discNum = Number(diskon) || 0
+    const hasDiscount = discNum > 0 && discNum < origNum
+    const finalPrice = Math.max(0, origNum - discNum)
+    await mutations.updateItem(item.id, { name: name.trim(), price: finalPrice, qty: Number(qty) || 1, originalPrice: hasDiscount ? origNum : null })
     setEditing(false)
   }
 
@@ -377,19 +425,22 @@ function ItemRow({ item, participants, mutations }: { item: BillItem; participan
   }
 
   if (editing) {
+    const origNum = Number(hargaAsli) || 0
+    const discNum = Number(diskon) || 0
+    const finalPrice = Math.max(0, origNum - discNum)
     return (
       <div className="space-y-2 rounded-md border p-3 bg-muted/40">
         <Input placeholder="Nama menu" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        <div className="grid grid-cols-3 gap-2">
-          <AmountInput placeholder="Harga satuan" value={price} onChange={setPrice} />
-          <AmountInput placeholder="Harga asli (opsional)" value={originalPrice} onChange={setOriginalPrice} />
+        <div className="grid grid-cols-2 gap-2">
+          <AmountInput placeholder="Harga asli" value={hargaAsli} onChange={setHargaAsli} />
           <Input type="number" min={1} placeholder="Qty" value={qty} onChange={(e) => setQty(e.target.value)} />
         </div>
-        {originalPrice && Number(originalPrice) > 0 && (
+        <AmountInput placeholder="Diskon (opsional)" value={diskon} onChange={setDiskon} />
+        {discNum > 0 && origNum > 0 && (
           <p className="text-xs text-muted-foreground">
-            {Number(originalPrice) > Number(price)
-              ? `Diskon: -${formatCurrency((Number(originalPrice) - Number(price)) * (Number(qty) || 1))}`
-              : "Harga asli harus lebih besar dari harga satuan"}
+            {discNum < origNum
+              ? <>Harga bayar: <span className="font-medium text-foreground">{formatCurrency(finalPrice)}</span> per item</>
+              : "Diskon tidak boleh melebihi harga asli"}
           </p>
         )}
         <div className="flex gap-2">
@@ -572,7 +623,13 @@ function ChargeRow({ charge, onChange, onDelete }: { charge: BillCharge; onChang
   )
 }
 
-function ParticipantsSection({ participants, mutations }: { participants: BillParticipant[]; mutations: Mutations }) {
+function ParticipantsSection({ participants, mutations, userName, ownerParticipantId, onSetOwner }: {
+  participants: BillParticipant[]
+  mutations: Mutations
+  userName: string
+  ownerParticipantId: string | null
+  onSetOwner: (pid: string | null) => void
+}) {
   const [addOpen, setAddOpen] = useState(false)
   const [name, setName] = useState("")
   const [contact, setContact] = useState("")
@@ -587,13 +644,29 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
     reset()
   }
 
+  async function addSelf() {
+    const alreadyAdded = participants.some((p) => p.id === ownerParticipantId)
+    if (alreadyAdded) return
+    const newId = await mutations.addParticipant({ name: userName })
+    if (newId) onSetOwner(newId)
+  }
+
+  const selfAlreadyAdded = ownerParticipantId !== null && participants.some((p) => p.id === ownerParticipantId)
+
   return (
     <Card>
       <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Peserta</CardTitle>
-        <Button size="sm" variant="outline" onClick={() => setAddOpen((v) => !v)}>
-          <Plus className="h-4 w-4 mr-1" /> Tambah
-        </Button>
+        <div className="flex gap-1.5">
+          {!selfAlreadyAdded && (
+            <Button size="sm" variant="outline" onClick={addSelf}>
+              <UserPlus className="h-4 w-4 mr-1" /> Tambah Saya
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setAddOpen((v) => !v)}>
+            <Plus className="h-4 w-4 mr-1" /> Tambah
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {addOpen && (
@@ -613,9 +686,16 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
 
         {participants.map((p) => (
           <div key={p.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{p.name}</p>
-              {p.contact && <p className="text-xs text-muted-foreground">{p.contact}</p>}
+            <div className="min-w-0 flex items-center gap-2">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium truncate">{p.name}</p>
+                  {p.id === ownerParticipantId && (
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">Saya</Badge>
+                  )}
+                </div>
+                {p.contact && <p className="text-xs text-muted-foreground">{p.contact}</p>}
+              </div>
             </div>
             <Button
               variant="ghost"
@@ -633,7 +713,7 @@ function ParticipantsSection({ participants, mutations }: { participants: BillPa
   )
 }
 
-function BreakdownSection({ breakdowns, billTitle, paymentInfo, mutations }: { breakdowns: ParticipantBreakdown[]; billTitle: string; paymentInfo: BillPaymentInfo | null; mutations: Mutations }) {
+function BreakdownSection({ breakdowns, billTitle, billCreatedAt, participants, paymentInfo, mutations, ownerParticipantId, onSynced }: { breakdowns: ParticipantBreakdown[]; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; paymentInfo: BillPaymentInfo | null; mutations: Mutations; ownerParticipantId: string | null; onSynced: () => void }) {
   function buildWaText(b: ParticipantBreakdown) {
     const chargesTotal = b.chargeShares.reduce((s, c) => s + c.amount, 0)
     const hasItems = b.lineItems.length > 0
@@ -684,19 +764,24 @@ function BreakdownSection({ breakdowns, billTitle, paymentInfo, mutations }: { b
         )}
       </CardHeader>
       <CardContent className="space-y-3">
-        {breakdowns.map((b) => (
-          <BreakdownCard key={b.participantId} breakdown={b} buildWaText={buildWaText} mutations={mutations} />
-        ))}
+        {breakdowns
+          .slice()
+          .sort((a, b) => (a.participantId === ownerParticipantId ? -1 : b.participantId === ownerParticipantId ? 1 : 0))
+          .map((b) => (
+            <BreakdownCard key={b.participantId} breakdown={b} buildWaText={buildWaText} mutations={mutations} billTitle={billTitle} billCreatedAt={billCreatedAt} participants={participants} isOwner={b.participantId === ownerParticipantId} onSynced={onSynced} />
+          ))}
       </CardContent>
     </Card>
   )
 }
 
-function BreakdownCard({ breakdown, buildWaText, mutations }: { breakdown: ParticipantBreakdown; buildWaText: (b: ParticipantBreakdown) => string; mutations: Mutations }) {
+function BreakdownCard({ breakdown, buildWaText, mutations, billTitle, billCreatedAt, participants, isOwner, onSynced }: { breakdown: ParticipantBreakdown; buildWaText: (b: ParticipantBreakdown) => string; mutations: Mutations; billTitle: string; billCreatedAt: string; participants: BillParticipant[]; isOwner: boolean; onSynced: () => void }) {
   const chargesTotal = breakdown.chargeShares.reduce((s, c) => s + c.amount, 0)
   const hasItems = breakdown.lineItems.length > 0
   const hasCharges = chargesTotal > 0
   const [expanded, setExpanded] = useState(false)
+  const [txOpen, setTxOpen] = useState(false)
+  const participant = participants.find((p) => p.id === breakdown.participantId)
 
   function togglePaid() {
     mutations.updateParticipant(breakdown.participantId, { status: breakdown.status === "paid" ? "unpaid" : "paid" })
@@ -708,15 +793,20 @@ function BreakdownCard({ breakdown, buildWaText, mutations }: { breakdown: Parti
     window.open(`https://wa.me/${phone}?text=${text}`, "_blank")
   }
 
+  const itemDesc = breakdown.lineItems.length > 0
+    ? breakdown.lineItems.map((li) => `${li.name} - ${formatCurrency(li.share)}`).join(", ")
+    : `Bagi tagihan: ${billTitle}`
+
   return (
-    <div className="rounded-md border">
+    <div className={`rounded-md border${isOwner ? " border-primary/40 bg-primary/5" : ""}`}>
       <button
         className="w-full flex items-center justify-between gap-2 p-3 text-left"
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="font-medium text-sm">{breakdown.name}</p>
+            {isOwner && <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">Saya</Badge>}
             {breakdown.status === "paid" && (
               <Badge className="text-xs py-0 px-1.5 h-4 bg-green-600 hover:bg-green-600"><Check className="h-3 w-3 mr-0.5" />Lunas</Badge>
             )}
@@ -728,6 +818,21 @@ function BreakdownCard({ breakdown, buildWaText, mutations }: { breakdown: Parti
           {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
         </div>
       </button>
+
+      {isOwner && !expanded && (
+        <div className="px-3 pb-3 -mt-1">
+          {participant?.transactionId ? (
+            <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+              <Check className="h-3 w-3" />
+              <span>Sudah dicatat ke transaksi</span>
+            </div>
+          ) : (
+            <Button size="sm" className="h-7 text-xs w-full" onClick={(e) => { e.stopPropagation(); setTxOpen(true) }}>
+              <Receipt className="h-3 w-3 mr-1" /> Catat Bagian Saya ke Transaksi
+            </Button>
+          )}
+        </div>
+      )}
 
       {expanded && (
         <div className="px-3 pb-3 space-y-3 border-t pt-3">
@@ -779,8 +884,30 @@ function BreakdownCard({ breakdown, buildWaText, mutations }: { breakdown: Parti
               {breakdown.status === "paid" ? "Tandai Belum Lunas" : "Tandai Lunas"}
             </Button>
           </div>
+          {participant?.transactionId ? (
+            <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+              <Check className="h-3 w-3" />
+              <span>Sudah dicatat ke transaksi</span>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="h-7 text-xs w-full" onClick={() => setTxOpen(true)}>
+              <Receipt className="h-3 w-3 mr-1" /> Catat ke Transaksi
+            </Button>
+          )}
         </div>
       )}
+      <AddTransactionModal
+        open={txOpen}
+        onOpenChange={setTxOpen}
+        initialValues={{
+          amount: String(Math.round(breakdown.total)),
+          description: itemDesc,
+          type: "expense",
+          date: new Date(billCreatedAt),
+          billParticipantId: breakdown.participantId,
+        }}
+        onSuccess={onSynced}
+      />
     </div>
   )
 }

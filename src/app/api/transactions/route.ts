@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db, dbClient } from "@/lib/db"
-import { transaction, walletAccount, notification, budget } from "@/lib/schema"
+import { transaction, walletAccount, notification, budget, billParticipant } from "@/lib/schema"
 import { eq, and, desc, sql, like, sum } from "drizzle-orm"
 import { requireAuth, generateId } from "@/lib/api-auth"
 import { sendPushToUser } from "@/lib/push"
@@ -22,8 +22,9 @@ async function ensureMigrations() {
   if (migrated) return
   await dbClient.execute(`ALTER TABLE "transaction" ADD COLUMN subcategory TEXT`).catch(() => {})
   await dbClient.execute(`ALTER TABLE budget ADD COLUMN subcategory TEXT`).catch(() => {})
-  // Backfill existing transactions with no subcategory → dll
   await dbClient.execute(`UPDATE "transaction" SET subcategory = 'dll' WHERE subcategory IS NULL`).catch(() => {})
+  await dbClient.execute(`ALTER TABLE "transaction" ADD COLUMN bill_participant_id TEXT`).catch(() => {})
+  await dbClient.execute(`ALTER TABLE bill_participant ADD COLUMN transaction_id TEXT`).catch(() => {})
   migrated = true
 }
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
   await ensureMigrations()
 
   const body = await request.json()
-  const { walletAccountId, amount, type, category, subcategory, description, transactionDate, source = "manual" } = body
+  const { walletAccountId, amount, type, category, subcategory, description, transactionDate, source = "manual", billParticipantId } = body
 
   if (!walletAccountId || !amount || !type || !category || !description || !transactionDate) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -61,8 +62,16 @@ export async function POST(request: NextRequest) {
 
   const [created] = await db
     .insert(transaction)
-    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, subcategory: subcategory ?? null, description, transactionDate, source })
+    .values({ id: generateId(), userId: session.user.id, walletAccountId, amount: Number(amount), type, category, subcategory: subcategory ?? null, description, transactionDate, source, billParticipantId: billParticipantId ?? null })
     .returning()
+
+  if (billParticipantId) {
+    await db
+      .update(billParticipant)
+      .set({ transactionId: created.id })
+      .where(eq(billParticipant.id, billParticipantId))
+      .catch(console.error)
+  }
 
   const delta = type === "income" ? Number(amount) : -Number(amount)
   await db
@@ -71,9 +80,13 @@ export async function POST(request: NextRequest) {
     .where(eq(walletAccount.id, walletAccountId))
 
   // Notifications and budget warnings are best-effort — never block transaction response
+  const txTitle = type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat"
+  const txBody = `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`
+
+  // Push runs independently so a DB notification error doesn't block it
+  sendPushToUser(session.user.id, { title: txTitle, body: txBody, url: "/dashboard/transactions" }).catch(console.error)
+
   try {
-    const txTitle = type === "income" ? "Pemasukan Dicatat" : "Pengeluaran Dicatat"
-    const txBody = `${description} — ${type === "income" ? "Pemasukan" : "Pengeluaran"} berhasil dicatat.`
     await db
       .insert(notification)
       .values({
@@ -84,7 +97,6 @@ export async function POST(request: NextRequest) {
         body: txBody,
         isRead: false,
       })
-    await sendPushToUser(session.user.id, { title: txTitle, body: txBody, url: "/dashboard/transactions" })
 
     if (type === "expense") {
       const [budgetRow] = await db
@@ -136,8 +148,8 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-  } catch {
-    // ignore — transaction already committed
+  } catch (err) {
+    console.error("[tx] notification/budget error:", err)
   }
 
   return NextResponse.json(created, { status: 201 })

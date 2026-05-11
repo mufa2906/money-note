@@ -73,7 +73,8 @@ export const transaction = sqliteTable("transaction", {
   subcategory: text("subcategory"),
   description: text("description").notNull(),
   transactionDate: text("transaction_date").notNull(),
-  source: text("source", { enum: ["manual", "bot", "import"] }).notNull().default("manual"),
+  source: text("source", { enum: ["manual", "bot", "import", "split_bill"] }).notNull().default("manual"),
+  billParticipantId: text("bill_participant_id"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 })
 
@@ -138,6 +139,7 @@ export const billParticipant = sqliteTable("bill_participant", {
   name: text("name").notNull(),
   contact: text("contact"),
   status: text("status", { enum: ["unpaid", "paid"] }).notNull().default("unpaid"),
+  transactionId: text("transaction_id"),
 })
 
 export const billItemAssignment = sqliteTable("bill_item_assignment", {

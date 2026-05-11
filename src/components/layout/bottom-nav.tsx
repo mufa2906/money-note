@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import { LayoutDashboard, ArrowLeftRight, Sparkles, Settings, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
-import { QuickCaptureSheet } from "@/components/transactions/quick-capture-sheet"
+import { InputMethodSheet } from "@/components/transactions/input-method-sheet"
 
 const ITEMS = [
   { href: "/dashboard", label: "Beranda", icon: LayoutDashboard, exact: true },
@@ -57,7 +57,7 @@ export function BottomNav() {
           )
         })}
       </nav>
-      <QuickCaptureSheet open={addOpen} onOpenChange={setAddOpen} />
+      <InputMethodSheet open={addOpen} onOpenChange={setAddOpen} />
     </>
   )
 }

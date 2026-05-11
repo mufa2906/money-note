@@ -39,13 +39,16 @@ export function usePushNotification() {
       const { publicKey } = await keyRes.json()
 
       const reg = await navigator.serviceWorker.ready
+      const existing = await reg.pushManager.getSubscription()
+      if (existing) await existing.unsubscribe()
+
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       })
 
       const json = sub.toJSON()
-      await fetch("/api/push/subscribe", {
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -54,6 +57,7 @@ export function usePushNotification() {
           auth: json.keys?.auth,
         }),
       })
+      if (!res.ok) return false
 
       setIsSubscribed(true)
       return true
@@ -85,8 +89,10 @@ export function usePushNotification() {
 }
 
 function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  // Strip any characters that aren't valid base64url (guards against trailing newlines or invisible chars from env vars)
+  const clean = base64String.replace(/[^A-Za-z0-9\-_]/g, "")
+  const padding = "=".repeat((4 - (clean.length % 4)) % 4)
+  const base64 = (clean + padding).replace(/-/g, "+").replace(/_/g, "/")
   const rawData = atob(base64)
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
 }

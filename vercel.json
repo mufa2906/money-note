@@ -5,6 +5,10 @@
       "schedule": "0 8 * * 1"
     },
     {
+      "path": "/api/cron/split-bill-reminder",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/cron/monthly-review",
       "schedule": "0 9 1 * *"
     }
