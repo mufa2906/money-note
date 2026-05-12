@@ -21,28 +21,24 @@ export async function POST(request: NextRequest) {
 
   const accountList = accounts.map((a) => `"${a.name}" (id: ${a.id})`).join(", ")
 
-  const prompt = `Parse teks transaksi keuangan Indonesia berikut menjadi JSON terstruktur.
+  const prompt = `Ekstrak informasi transaksi keuangan dari teks berikut dan kembalikan sebagai JSON.
 
 Teks: "${text}"
 
-Daftar akun yang tersedia: ${accountList || "tidak ada"}
+Akun tersedia: ${accountList || "tidak ada"}
 
-Kembalikan JSON dengan format ini:
-{
-  "description": "deskripsi transaksi (wajib)",
-  "amount": 25000,
-  "type": "expense",
-  "category": "makanan",
-  "walletAccountId": "id-akun-jika-disebutkan-atau-null"
-}
+Output JSON (WAJIB semua field ada):
+{"description":"...","amount":10000,"type":"expense","category":"makanan","walletAccountId":null}
 
-Aturan:
-- amount: angka tanpa format. "25rb" = 25000, "1.5jt" = 1500000, "500k" = 500000
-- type: "expense" untuk pengeluaran (default), "income" untuk pemasukan
-- category: pilih dari: makanan, transportasi, belanja, hiburan, tagihan, kesehatan, pendidikan, gaji, lainnya
-- walletAccountId: cocokkan nama akun dari teks dengan daftar akun di atas (case-insensitive), atau null jika tidak disebutkan
-- Jika amount tidak ditemukan, set null
-- Balas HANYA JSON, tanpa penjelasan`
+Contoh konversi:
+- "popmie 10rb" → {"description":"popmie","amount":10000,"type":"expense","category":"makanan","walletAccountId":null}
+- "gaji 3jt BCA" → {"description":"gaji","amount":3000000,"type":"income","category":"gaji","walletAccountId":"<id BCA jika ada>"}
+- "bensin 50k" → {"description":"bensin","amount":50000,"type":"expense","category":"transportasi","walletAccountId":null}
+- "netflix 54000" → {"description":"netflix","amount":54000,"type":"expense","category":"hiburan","walletAccountId":null}
+
+Aturan amount: rb/ribu/k=×1000, jt/juta=×1000000. amount HARUS number bukan string.
+Aturan category: makanan|transportasi|belanja|hiburan|tagihan|kesehatan|pendidikan|gaji|lainnya
+Aturan walletAccountId: cocokkan nama akun dari teks, atau null.`
 
   try {
     const res = await fetch(`${GEMINI_API}?key=${apiKey}`, {
@@ -62,10 +58,31 @@ Aturan:
 
     const parsed = JSON.parse(raw)
 
+    // Parse amount — Gemini sometimes returns string instead of number
+    let amount: string | null = null
+    if (typeof parsed.amount === "number" && parsed.amount > 0) {
+      amount = String(Math.round(parsed.amount))
+    } else if (typeof parsed.amount === "string" && parsed.amount.trim()) {
+      const num = parseInt(parsed.amount.replace(/[^0-9]/g, ""), 10)
+      if (!isNaN(num) && num > 0) amount = String(num)
+    }
+    // Fallback: try regex on original text if AI missed it
+    if (!amount) {
+      const match = text.match(/(\d[\d.,]*)\s*(rb|ribu|k|jt|juta|m|000)?/i)
+      if (match) {
+        let num = parseFloat(match[1].replace(/[.,]/g, ""))
+        const unit = (match[2] ?? "").toLowerCase()
+        if (unit === "rb" || unit === "ribu" || unit === "k") num *= 1000
+        else if (unit === "jt" || unit === "juta" || unit === "m") num *= 1000000
+        else if (num < 1000 && !unit) num *= 1000
+        if (num > 0) amount = String(Math.round(num))
+      }
+    }
+
     // Validate and sanitize
     const result = {
       description: typeof parsed.description === "string" ? parsed.description : text,
-      amount: typeof parsed.amount === "number" && parsed.amount > 0 ? String(parsed.amount) : null,
+      amount,
       type: parsed.type === "income" ? "income" : "expense",
       category: VALID_CATEGORIES.includes(parsed.category) ? parsed.category : "lainnya",
       walletAccountId: typeof parsed.walletAccountId === "string" ? parsed.walletAccountId : null,
